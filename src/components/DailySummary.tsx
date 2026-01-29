@@ -101,7 +101,6 @@ export function DailySummary({
           low={saturatedFat.low}
           high={saturatedFat.high}
           unit="g"
-          color="red"
           recommendation={recs.saturatedFat}
         />
         <SecondaryCard
@@ -110,7 +109,6 @@ export function DailySummary({
           low={addedSugar.low}
           high={addedSugar.high}
           unit="g"
-          color="pink"
           recommendation={recs.addedSugar}
         />
         <SecondaryCard
@@ -119,7 +117,6 @@ export function DailySummary({
           low={sodium.low}
           high={sodium.high}
           unit="mg"
-          color="purple"
           recommendation={recs.sodium}
         />
         <SecondaryCard
@@ -128,7 +125,6 @@ export function DailySummary({
           low={fiber.low}
           high={fiber.high}
           unit="g"
-          color="emerald"
           recommendation={recs.fiber}
         />
       </div>
@@ -208,29 +204,10 @@ interface SecondaryCardProps {
   low: number;
   high: number;
   unit: string;
-  color: 'amber' | 'orange' | 'red' | 'emerald' | 'pink' | 'purple';
   recommendation?: Recommendation;
 }
 
-function SecondaryCard({ label, value, low, high, unit, color, recommendation }: SecondaryCardProps) {
-  const colorClasses: Record<string, string> = {
-    amber: 'text-amber-600 dark:text-amber-400',
-    orange: 'text-orange-600 dark:text-orange-400',
-    red: 'text-red-600 dark:text-red-400',
-    emerald: 'text-emerald-600 dark:text-emerald-400',
-    pink: 'text-pink-600 dark:text-pink-400',
-    purple: 'text-purple-600 dark:text-purple-400',
-  };
-
-  const bgClasses: Record<string, string> = {
-    amber: 'bg-amber-50 dark:bg-amber-950/30',
-    orange: 'bg-orange-50 dark:bg-orange-950/30',
-    red: 'bg-red-50 dark:bg-red-950/30',
-    emerald: 'bg-emerald-50 dark:bg-emerald-950/30',
-    pink: 'bg-pink-50 dark:bg-pink-950/30',
-    purple: 'bg-purple-50 dark:bg-purple-950/30',
-  };
-
+function SecondaryCard({ label, value, low, high, unit, recommendation }: SecondaryCardProps) {
   // Determine status based on recommendation type
   let status: 'good' | 'warning' | 'bad' | 'neutral' = 'neutral';
   let statusText = '';
@@ -290,7 +267,7 @@ function SecondaryCard({ label, value, low, high, unit, color, recommendation }:
   };
 
   return (
-    <div className={`rounded-lg p-3 ${bgClasses[color]}`}>
+    <div className="rounded-lg p-3 bg-zinc-100 dark:bg-zinc-800/50">
       <div className="flex items-start justify-between">
         <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
         {recommendation && (
@@ -301,7 +278,7 @@ function SecondaryCard({ label, value, low, high, unit, color, recommendation }:
           </span>
         )}
       </div>
-      <p className={`mt-0.5 text-lg font-semibold ${colorClasses[color]}`}>
+      <p className="mt-0.5 text-lg font-semibold text-zinc-700 dark:text-zinc-200">
         {Math.round(value)}
         <span className="text-xs font-normal text-zinc-400 ml-0.5">{unit}</span>
       </p>
