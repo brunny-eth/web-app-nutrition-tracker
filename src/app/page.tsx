@@ -225,9 +225,6 @@ export default function Home() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg dark:bg-zinc-900">
-          <h1 className="mb-6 text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {authStatus?.isSetUp ? 'Welcome Back' : 'Nutrition Tracker'}
-          </h1>
           <LoginForm onSuccess={checkAuth} isSetUp={authStatus?.isSetUp || false} />
         </div>
       </div>
