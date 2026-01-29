@@ -10,7 +10,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE user_settings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   
-  -- Auth (simple password gate)
+  -- Auth (email + password)
+  email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   
   -- User identity
@@ -57,8 +58,10 @@ INSERT INTO activity_levels (id, label, description, multiplier, multiplier_low,
 -- ============================================
 CREATE TABLE daily_activity (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  resolved_date DATE NOT NULL UNIQUE, -- YYYY-MM-DD in user timezone
+  user_id UUID REFERENCES user_settings(id) ON DELETE CASCADE NOT NULL,
+  resolved_date DATE NOT NULL,
   activity_level_id INTEGER REFERENCES activity_levels(id) DEFAULT 1,
+  UNIQUE(user_id, resolved_date), -- One activity level per user per day
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -70,6 +73,9 @@ CREATE INDEX idx_daily_activity_date ON daily_activity(resolved_date);
 -- ============================================
 CREATE TABLE entries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  
+  -- User who created this entry
+  user_id UUID REFERENCES user_settings(id) ON DELETE CASCADE NOT NULL,
   
   -- The raw text input from user
   raw_text TEXT NOT NULL,
@@ -182,6 +188,7 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- Daily totals view (aggregates entry_items by resolved_date)
 CREATE OR REPLACE VIEW daily_totals AS
 SELECT 
+  e.user_id,
   e.resolved_date,
   COUNT(DISTINCT e.id) as entry_count,
   COUNT(ei.id) as item_count,
@@ -233,7 +240,7 @@ SELECT
 
 FROM entries e
 LEFT JOIN entry_items ei ON ei.entry_id = e.id
-GROUP BY e.resolved_date
+GROUP BY e.user_id, e.resolved_date
 ORDER BY e.resolved_date DESC;
 
 -- ============================================

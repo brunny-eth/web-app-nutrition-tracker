@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isAuthenticated } from '@/lib/auth';
+import { getUserId } from '@/lib/auth';
 
 // Use untyped client for this route to avoid type issues with upsert
 function getSupabase() {
@@ -12,6 +12,7 @@ function getSupabase() {
 
 interface DailyActivity {
   id: string;
+  user_id: string;
   resolved_date: string;
   activity_level_id: number;
   created_at: string;
@@ -23,8 +24,8 @@ interface DailyActivity {
  */
 export async function GET(request: NextRequest) {
   try {
-    const authenticated = await isAuthenticated();
-    if (!authenticated) {
+    const userId = await getUserId();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
     const { data: activity } = await supabase
       .from('daily_activity')
       .select('*')
+      .eq('user_id', userId)
       .eq('resolved_date', date)
       .maybeSingle();
 
@@ -55,8 +57,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const authenticated = await isAuthenticated();
-    if (!authenticated) {
+    const userId = await getUserId();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -70,12 +72,16 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
-    // Delete existing and insert new (simpler than upsert with type issues)
-    await supabase.from('daily_activity').delete().eq('resolved_date', date);
+    // Delete existing for this user+date and insert new
+    await supabase
+      .from('daily_activity')
+      .delete()
+      .eq('user_id', userId)
+      .eq('resolved_date', date);
 
     const { data, error } = await supabase
       .from('daily_activity')
-      .insert({ resolved_date: date, activity_level_id })
+      .insert({ user_id: userId, resolved_date: date, activity_level_id })
       .select('*')
       .single();
 

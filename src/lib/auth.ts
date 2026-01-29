@@ -19,12 +19,34 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 /**
- * Create a simple session token
- * For single-user app, we just need to verify they entered the password
+ * Create a session token that includes the user ID
+ * Format: base64(userId:randomToken)
  */
-export function createSessionToken(): string {
-  // Simple random token - not cryptographically critical for single-user app
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+export function createSessionToken(userId: string): string {
+  const randomPart = Math.random().toString(36).substring(2) + Date.now().toString(36);
+  const payload = `${userId}:${randomPart}`;
+  return Buffer.from(payload).toString('base64');
+}
+
+/**
+ * Extract user ID from session token
+ */
+export function parseSessionToken(token: string): string | null {
+  if (!token || token.length < 10) return null;
+  
+  try {
+    const decoded = Buffer.from(token, 'base64').toString('utf-8');
+    // Valid tokens have format: userId:randomToken
+    if (!decoded.includes(':')) return null;
+    
+    const [userId] = decoded.split(':');
+    // User IDs should be non-empty and look like UUIDs or simple IDs
+    if (!userId || userId.length < 1) return null;
+    
+    return userId;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -59,9 +81,17 @@ export async function clearSessionCookie(): Promise<void> {
 
 /**
  * Check if user is authenticated (server-side)
- * For single-user, we just check if session cookie exists
  */
 export async function isAuthenticated(): Promise<boolean> {
+  const userId = await getUserId();
+  return !!userId;
+}
+
+/**
+ * Get the current user's ID from the session cookie
+ */
+export async function getUserId(): Promise<string | null> {
   const token = await getSessionCookie();
-  return !!token;
+  if (!token) return null;
+  return parseSessionToken(token);
 }

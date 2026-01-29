@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isAuthenticated } from '@/lib/auth';
+import { getUserId } from '@/lib/auth';
 
 function getSupabase() {
   return createClient(
@@ -10,8 +10,8 @@ function getSupabase() {
 }
 
 export async function GET(request: NextRequest) {
-  const authenticated = await isAuthenticated();
-  if (!authenticated) {
+  const userId = await getUserId();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const { data: settings } = await supabase
     .from('user_settings')
     .select('*')
+    .eq('id', userId)
     .single();
 
   // Calculate date range
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
         sodium_mg
       )
     `)
+    .eq('user_id', userId)
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr)
     .order('resolved_date', { ascending: true });
@@ -58,6 +60,7 @@ export async function GET(request: NextRequest) {
   const { data: activities } = await supabase
     .from('daily_activity')
     .select('resolved_date, activity_level_id')
+    .eq('user_id', userId)
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr);
 

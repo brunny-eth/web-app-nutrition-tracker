@@ -1,35 +1,50 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { isAuthenticated } from '@/lib/auth';
+import { getUserId } from '@/lib/auth';
 
 /**
- * GET /api/auth/status - Check authentication status and setup state
+ * GET /api/auth/status - Check authentication status and get user settings
  */
 export async function GET() {
   try {
-    const authenticated = await isAuthenticated();
+    const userId = await getUserId();
+    const authenticated = !!userId;
     
     const supabase = createServerClient();
-    const { data: settings } = await supabase
+    
+    // Check if any users exist (to determine if showing login or signup)
+    const { count } = await supabase
       .from('user_settings')
-      .select('*')
-      .limit(1)
-      .single();
+      .select('*', { count: 'exact', head: true });
 
-    const isSetUp = !!settings;
+    const isSetUp = (count || 0) > 0;
+
+    // Get current user's settings if authenticated
+    let settings = null;
+    if (authenticated && userId) {
+      const { data } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (data) {
+        settings = {
+          name: data.name,
+          weight_kg: data.weight_kg,
+          height_cm: data.height_cm,
+          age_years: data.age_years,
+          sex: data.sex,
+          calorie_deficit: data.calorie_deficit,
+          timezone: data.timezone,
+        };
+      }
+    }
 
     return NextResponse.json({
       authenticated,
       isSetUp,
-      settings: authenticated && settings ? {
-        name: settings.name,
-        weight_kg: settings.weight_kg,
-        height_cm: settings.height_cm,
-        age_years: settings.age_years,
-        sex: settings.sex,
-        calorie_deficit: settings.calorie_deficit,
-        timezone: settings.timezone,
-      } : null,
+      settings,
     });
   } catch (error) {
     console.error('Auth status error:', error);

@@ -3,12 +3,15 @@ import { createServerClient } from '@/lib/supabase';
 import { hashPassword, createSessionToken, setSessionCookie } from '@/lib/auth';
 
 /**
- * Initial setup endpoint - creates the first user settings with password
- * Only works if no user_settings exist yet
+ * Setup endpoint - creates a new user account
  */
 export async function POST(request: NextRequest) {
   try {
-    const { name, password, weight_kg, height_cm, age_years, sex, calorie_deficit } = await request.json();
+    const { email, name, password, weight_kg, height_cm, age_years, sex, calorie_deficit } = await request.json();
+
+    if (!email || !email.includes('@')) {
+      return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
+    }
 
     if (!name || name.trim().length === 0) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -19,24 +22,26 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient();
+    const normalizedEmail = email.toLowerCase().trim();
     
-    // Check if already set up
+    // Check if email already exists
     const { data: existing } = await supabase
       .from('user_settings')
       .select('id')
-      .limit(1)
+      .eq('email', normalizedEmail)
       .single();
 
     if (existing) {
-      return NextResponse.json({ error: 'Already set up' }, { status: 400 });
+      return NextResponse.json({ error: 'Email already registered' }, { status: 400 });
     }
 
-    // Hash password and create settings
+    // Hash password and create user
     const password_hash = await hashPassword(password);
 
-    const { error } = await supabase
+    const { data: newUser, error } = await supabase
       .from('user_settings')
       .insert({
+        email: normalizedEmail,
         password_hash,
         name: name.trim(),
         weight_kg: weight_kg || null,
@@ -45,15 +50,17 @@ export async function POST(request: NextRequest) {
         sex: sex || null,
         calorie_deficit: calorie_deficit || 500,
         timezone: 'America/New_York',
-      });
+      })
+      .select('id')
+      .single();
 
-    if (error) {
+    if (error || !newUser) {
       console.error('Setup error:', error);
-      return NextResponse.json({ error: 'Failed to create settings' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to create account' }, { status: 500 });
     }
 
     // Auto-login after setup
-    const token = createSessionToken();
+    const token = createSessionToken(newUser.id);
     await setSessionCookie(token);
 
     return NextResponse.json({ success: true });

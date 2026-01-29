@@ -4,34 +4,34 @@ import { verifyPassword, createSessionToken, setSessionCookie } from '@/lib/auth
 
 export async function POST(request: NextRequest) {
   try {
-    const { password } = await request.json();
+    const { email, password } = await request.json();
 
-    if (!password) {
-      return NextResponse.json({ error: 'Password required' }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
     }
 
     const supabase = createServerClient();
     
-    // Get user settings (single user)
-    const { data: settings, error } = await supabase
+    // Find user by email
+    const { data: user, error } = await supabase
       .from('user_settings')
-      .select('password_hash')
-      .limit(1)
+      .select('id, password_hash')
+      .eq('email', email.toLowerCase().trim())
       .single();
 
-    if (error || !settings) {
-      return NextResponse.json({ error: 'Not set up yet' }, { status: 404 });
+    if (error || !user) {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
     // Verify password
-    const valid = await verifyPassword(password, settings.password_hash);
+    const valid = await verifyPassword(password, user.password_hash);
     
     if (!valid) {
-      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
-    // Create session
-    const token = createSessionToken();
+    // Create session with user ID
+    const token = createSessionToken(user.id);
     await setSessionCookie(token);
 
     return NextResponse.json({ success: true });

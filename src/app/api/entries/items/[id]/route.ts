@@ -1,12 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isAuthenticated } from '@/lib/auth';
+import { getUserId } from '@/lib/auth';
 
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+}
+
+/**
+ * Verify item belongs to user by checking entry ownership
+ */
+async function verifyItemOwnership(supabase: ReturnType<typeof getSupabase>, itemId: string, userId: string): Promise<boolean> {
+  const { data: item } = await supabase
+    .from('entry_items')
+    .select('entry_id')
+    .eq('id', itemId)
+    .single();
+
+  if (!item) return false;
+
+  const { data: entry } = await supabase
+    .from('entries')
+    .select('user_id')
+    .eq('id', item.entry_id)
+    .eq('user_id', userId)
+    .single();
+
+  return !!entry;
 }
 
 /**
@@ -17,8 +39,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authenticated = await isAuthenticated();
-    if (!authenticated) {
+    const userId = await getUserId();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -52,6 +74,12 @@ export async function PATCH(
     }
 
     const supabase = getSupabase();
+
+    // Verify item belongs to this user
+    const isOwner = await verifyItemOwnership(supabase, id, userId);
+    if (!isOwner) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
 
     // Get current item to track what's being overridden
     const { data: current, error: fetchError } = await supabase
@@ -155,13 +183,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authenticated = await isAuthenticated();
-    if (!authenticated) {
+    const userId = await getUserId();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id } = await params;
     const supabase = getSupabase();
+
+    // Verify item belongs to this user
+    const isOwner = await verifyItemOwnership(supabase, id, userId);
+    if (!isOwner) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
 
     const { error } = await supabase
       .from('entry_items')

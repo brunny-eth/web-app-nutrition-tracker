@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { isAuthenticated } from '@/lib/auth';
+import { getUserId } from '@/lib/auth';
 import { parseMealDescription, validateParsedMeal } from '@/lib/openai';
 import { resolveDate, getTodayInTimezone } from '@/lib/date-resolution';
 
@@ -10,8 +10,8 @@ import { resolveDate, getTodayInTimezone } from '@/lib/date-resolution';
 export async function POST(request: NextRequest) {
   try {
     // Check auth
-    const authenticated = await isAuthenticated();
-    if (!authenticated) {
+    const userId = await getUserId();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -23,11 +23,11 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServerClient();
 
-    // Get user timezone
+    // Get user's timezone
     const { data: settings } = await supabase
       .from('user_settings')
       .select('timezone')
-      .limit(1)
+      .eq('id', userId)
       .single();
 
     const timezone = settings?.timezone || 'America/New_York';
@@ -61,10 +61,11 @@ export async function POST(request: NextRequest) {
       explicitDateInText = resolved.explicit_date_in_text;
     }
 
-    // Create the entry
+    // Create the entry with user_id
     const { data: entry, error: entryError } = await supabase
       .from('entries')
       .insert({
+        user_id: userId,
         raw_text: raw_text.trim(),
         resolved_date: finalDate,
         explicit_date_in_text: explicitDateInText,
@@ -147,8 +148,8 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const authenticated = await isAuthenticated();
-    if (!authenticated) {
+    const userId = await getUserId();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -165,6 +166,7 @@ export async function GET(request: NextRequest) {
         *,
         entry_items (*)
       `)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (date) {

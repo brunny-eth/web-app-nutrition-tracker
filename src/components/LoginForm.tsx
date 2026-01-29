@@ -8,6 +8,7 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,7 +30,7 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (!res.ok) {
@@ -55,6 +56,7 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          email,
           name,
           password,
           weight_kg: weightKg ? parseFloat(weightKg) : null,
@@ -80,19 +82,33 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
 
   if (isSetUp) {
     return (
-      <form onSubmit={handleLogin} className="space-y-6">
+      <form onSubmit={handleLogin} className="space-y-5">
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label htmlFor="login-email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Email
+          </label>
+          <input
+            id="login-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            placeholder="you@example.com"
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <label htmlFor="login-password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Password
           </label>
           <input
-            id="password"
+            id="login-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
             placeholder="Enter your password"
-            autoFocus
           />
         </div>
 
@@ -102,7 +118,7 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
 
         <button
           type="submit"
-          disabled={loading || !password}
+          disabled={loading || !email || !password}
           className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? 'Signing in...' : 'Sign In'}
@@ -114,8 +130,23 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
   return (
     <form onSubmit={handleSetup} className="space-y-5">
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Set up your nutrition tracker. Body stats are optional but enable TDEE calculations.
+        Create your account. Body stats are optional but enable TDEE calculations.
       </p>
+
+      <div>
+        <label htmlFor="setup-email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Email <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="setup-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          placeholder="you@example.com"
+          autoFocus
+        />
+      </div>
 
       <div>
         <label htmlFor="name" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -128,7 +159,6 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
           onChange={(e) => setName(e.target.value)}
           className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           placeholder="Enter your name"
-          autoFocus
         />
       </div>
 
@@ -229,10 +259,10 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
 
       <button
         type="submit"
-        disabled={loading || !name.trim() || password.length < 4}
+        disabled={loading || !email.trim() || !name.trim() || password.length < 4}
         className="w-full rounded-lg bg-blue-600 px-4 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? 'Setting up...' : 'Get Started'}
+        {loading ? 'Creating account...' : 'Create Account'}
       </button>
     </form>
   );

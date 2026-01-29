@@ -12,6 +12,7 @@ export interface Database {
       user_settings: {
         Row: {
           id: string;
+          email: string;
           password_hash: string;
           name: string;
           weight_kg: number | null;
@@ -25,6 +26,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          email: string;
           password_hash: string;
           name: string;
           weight_kg?: number | null;
@@ -38,6 +40,7 @@ export interface Database {
         };
         Update: {
           id?: string;
+          email?: string;
           password_hash?: string;
           name?: string;
           weight_kg?: number | null;
@@ -79,6 +82,7 @@ export interface Database {
       daily_activity: {
         Row: {
           id: string;
+          user_id: string;
           resolved_date: string;
           activity_level_id: number;
           created_at: string;
@@ -86,6 +90,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          user_id: string;
           resolved_date: string;
           activity_level_id?: number;
           created_at?: string;
@@ -93,6 +98,7 @@ export interface Database {
         };
         Update: {
           id?: string;
+          user_id?: string;
           resolved_date?: string;
           activity_level_id?: number;
           created_at?: string;
@@ -102,6 +108,7 @@ export interface Database {
       entries: {
         Row: {
           id: string;
+          user_id: string;
           raw_text: string;
           created_at: string;
           resolved_date: string;
@@ -109,6 +116,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          user_id: string;
           raw_text: string;
           created_at?: string;
           resolved_date: string;
@@ -116,6 +124,7 @@ export interface Database {
         };
         Update: {
           id?: string;
+          user_id?: string;
           raw_text?: string;
           created_at?: string;
           resolved_date?: string;
@@ -248,6 +257,7 @@ export interface Database {
     Views: {
       daily_totals: {
         Row: {
+          user_id: string;
           resolved_date: string;
           entry_count: number;
           item_count: number;

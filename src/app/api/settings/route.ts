@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { isAuthenticated } from '@/lib/auth';
-import { hashPassword, verifyPassword } from '@/lib/auth';
+import { getUserId, hashPassword, verifyPassword } from '@/lib/auth';
 
 function getSupabase() {
   return createClient(
@@ -15,8 +14,8 @@ function getSupabase() {
  */
 export async function GET() {
   try {
-    const authenticated = await isAuthenticated();
-    if (!authenticated) {
+    const userId = await getUserId();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -24,8 +23,8 @@ export async function GET() {
 
     const { data: settings, error } = await supabase
       .from('user_settings')
-      .select('id, name, weight_kg, height_cm, age_years, sex, calorie_deficit, timezone, created_at')
-      .limit(1)
+      .select('id, email, name, weight_kg, height_cm, age_years, sex, calorie_deficit, timezone, created_at')
+      .eq('id', userId)
       .single();
 
     if (error || !settings) {
@@ -44,8 +43,8 @@ export async function GET() {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const authenticated = await isAuthenticated();
-    if (!authenticated) {
+    const userId = await getUserId();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -64,11 +63,11 @@ export async function PATCH(request: NextRequest) {
 
     const supabase = getSupabase();
 
-    // Get current settings
+    // Get current settings for this user
     const { data: current, error: fetchError } = await supabase
       .from('user_settings')
       .select('*')
-      .limit(1)
+      .eq('id', userId)
       .single();
 
     if (fetchError || !current) {
@@ -110,8 +109,8 @@ export async function PATCH(request: NextRequest) {
     const { data: updated, error: updateError } = await supabase
       .from('user_settings')
       .update(updates)
-      .eq('id', current.id)
-      .select('id, name, weight_kg, height_cm, age_years, sex, calorie_deficit, timezone')
+      .eq('id', userId)
+      .select('id, email, name, weight_kg, height_cm, age_years, sex, calorie_deficit, timezone')
       .single();
 
     if (updateError) {
