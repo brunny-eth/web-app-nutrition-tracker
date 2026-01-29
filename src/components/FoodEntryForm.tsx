@@ -53,73 +53,67 @@ export function FoodEntryForm({
     }
   };
 
-  const isCustomDate = selectedDate !== today && selectedDate !== yesterday;
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <div>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Log food here. Be as descriptive as possible for the best results. You can do 1 message a day or multiple throughout the day. E.g., '3 scrambled eggs, cooked with 1 pat butter, 2 slices Dave's Killer Bread toast' or 'lunch: 1 cup greek yogurt-based chicken salad, apple')"
-          rows={3}
+          rows={5}
           className="block w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           disabled={loading}
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">Log for:</span>
-          <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => onDateChange(today)}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                selectedDate === today
-                  ? 'bg-blue-600 text-white'
-                  : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => onDateChange(yesterday)}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                selectedDate === yesterday
-                  ? 'bg-blue-600 text-white'
-                  : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
-              }`}
-            >
-              Yesterday
-            </button>
-          </div>
-          <input
-            type="date"
-            value={isCustomDate ? selectedDate : ''}
-            onChange={(e) => onDateChange(e.target.value)}
-            max={today}
-            className="rounded-lg border border-zinc-200 px-2 py-1.5 text-sm text-zinc-600 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-          />
+      <button
+        type="submit"
+        disabled={loading || !text.trim()}
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {loading ? (
+          <>
+            <LoadingSpinner />
+            Parsing...
+          </>
+        ) : (
+          'Log Food'
+        )}
+      </button>
+
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-zinc-500 dark:text-zinc-400">Log for:</span>
+        <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => onDateChange(today)}
+            className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+              selectedDate === today
+                ? 'bg-blue-600 text-white'
+                : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
+            }`}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => onDateChange(yesterday)}
+            className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+              selectedDate === yesterday
+                ? 'bg-blue-600 text-white'
+                : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
+            }`}
+          >
+            Yesterday
+          </button>
         </div>
-
-        <div className="flex-1" />
-
-        <button
-          type="submit"
-          disabled={loading || !text.trim()}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? (
-            <>
-              <LoadingSpinner />
-              Parsing...
-            </>
-          ) : (
-            'Log Food'
-          )}
-        </button>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => onDateChange(e.target.value)}
+          max={today}
+          className="ml-auto rounded-lg border border-zinc-200 px-2 py-1.5 text-sm text-zinc-600 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+        />
       </div>
 
       {error && (

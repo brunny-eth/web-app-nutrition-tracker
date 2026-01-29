@@ -20,7 +20,7 @@ const ACTIVITY_LEVELS: ActivityLevel[] = [
   { id: 2, label: 'Light', description: 'Light exercise', multiplier: 1.375 },
   { id: 3, label: 'Moderate', description: 'Moderate exercise', multiplier: 1.55 },
   { id: 4, label: 'Active', description: 'Hard exercise', multiplier: 1.725 },
-  { id: 5, label: 'Very Active', description: 'Intense exercise', multiplier: 1.9 },
+  { id: 5, label: 'V. Active', description: 'Intense exercise', multiplier: 1.9 },
 ];
 
 export function ActivitySelector({ currentLevel, date, onSelect }: ActivitySelectorProps) {
@@ -50,13 +50,13 @@ export function ActivitySelector({ currentLevel, date, onSelect }: ActivitySelec
       <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
         Activity Level Today
       </h3>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-1.5">
         {ACTIVITY_LEVELS.map((level) => (
           <button
             key={level.id}
             onClick={() => handleSelect(level.id)}
             disabled={loading !== null}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+            className={`flex-1 rounded-lg px-1.5 py-2 text-xs font-medium transition-all ${
               currentLevel === level.id
                 ? 'bg-blue-600 text-white'
                 : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
