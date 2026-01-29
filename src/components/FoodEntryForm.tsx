@@ -59,8 +59,7 @@ export function FoodEntryForm({
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Log food here. Be as descriptive as possible for the best results. You can do 1 message a day or multiple throughout the day. E.g., '3 scrambled eggs, cooked with 1 pat butter, 2 slices Dave's Killer Bread toast' or 'lunch: 1 cup greek yogurt-based chicken salad, apple')"
-          rows={5}
+          placeholder="Add food you ate here, and be as descriptive as possible for the best results. You can do 1 message a day or multiple throughout the day. E.g., '3 scrambled eggs, cooked with 1 pat butter, 2 slices Dave's Killer Bread toast'"          rows={5}
           className="block w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           disabled={loading}
         />
