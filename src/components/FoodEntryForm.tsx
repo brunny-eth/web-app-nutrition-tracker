@@ -143,7 +143,7 @@ export function FoodEntryForm({
           onChange={(e) => setText(e.target.value)}
           placeholder={image 
             ? "Add details (optional) - e.g., '2 servings' or 'half portion'"
-            : "Log food here, or drag & drop a photo of nutrition facts/menu"
+            : "Log food here, or drag & drop a photo of nutrition facts/menu. The more details you include, the better. You can do 1 big message daily or split up each time, your choice."
           }
           rows={4}
           className="block w-full resize-none rounded-xl border-0 bg-transparent px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100"
@@ -185,7 +185,6 @@ export function FoodEntryForm({
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           onChange={handleFileSelect}
           className="hidden"
         />
