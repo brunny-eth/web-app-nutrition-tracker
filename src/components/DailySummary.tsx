@@ -80,7 +80,7 @@ export function DailySummary({
           high={calories.high}
           target={targetCalories}
           unit="kcal"
-          color="blue"
+          type="calories"
         />
         <PrimaryCard
           label="Protein"
@@ -89,7 +89,7 @@ export function DailySummary({
           high={protein.high}
           target={targetProtein}
           unit="g"
-          color="green"
+          type="protein"
         />
       </div>
 
@@ -139,32 +139,35 @@ interface PrimaryCardProps {
   high: number;
   target?: number;
   unit: string;
-  color: 'blue' | 'green';
+  type: 'calories' | 'protein';
 }
 
-function PrimaryCard({ label, value, low, high, target, unit, color }: PrimaryCardProps) {
-  const colorClasses = {
-    blue: 'text-blue-600 dark:text-blue-400',
-    green: 'text-green-600 dark:text-green-400',
-  };
-
-  const bgClasses = {
-    blue: 'bg-blue-50 dark:bg-blue-950/30',
-    green: 'bg-green-50 dark:bg-green-950/30',
-  };
-
-  const barColors = {
-    blue: '#3b82f6',
-    green: '#22c55e',
-  };
-
+function PrimaryCard({ label, value, low, high, target, unit, type }: PrimaryCardProps) {
+  // Calories: green when under target (deficit), red when over
+  // Protein: green when at/above target, red when below
   const progress = target ? Math.min((value / target) * 100, 100) : 0;
-  const isOverTarget = target && value > target;
+  
+  let isGood: boolean;
+  if (type === 'calories') {
+    isGood = !target || value <= target; // Under or at target = good
+  } else {
+    isGood = !target || value >= target; // At or above target = good
+  }
+
+  const textColor = isGood 
+    ? 'text-green-600 dark:text-green-400' 
+    : 'text-red-600 dark:text-red-400';
+  
+  const bgColor = isGood
+    ? 'bg-green-50 dark:bg-green-950/30'
+    : 'bg-red-50 dark:bg-red-950/30';
+
+  const barColor = isGood ? '#22c55e' : '#ef4444';
 
   return (
-    <div className={`rounded-xl p-4 ${bgClasses[color]}`}>
+    <div className={`rounded-xl p-4 ${bgColor}`}>
       <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-3xl font-bold ${colorClasses[color]}`}>
+      <p className={`mt-1 text-3xl font-bold ${textColor}`}>
         {Math.round(value)}
         <span className="text-base font-normal text-zinc-400 ml-1">{unit}</span>
       </p>
@@ -179,13 +182,18 @@ function PrimaryCard({ label, value, low, high, target, unit, color }: PrimaryCa
               className="h-full rounded-full transition-all"
               style={{ 
                 width: `${progress}%`, 
-                backgroundColor: isOverTarget ? '#ef4444' : barColors[color]
+                backgroundColor: barColor
               }}
             />
           </div>
           <p className="mt-1.5 text-xs text-zinc-500">
             {Math.round(value)} / {target} {unit}
-            {isOverTarget && <span className="text-red-500 ml-1">(+{Math.round(value - target)})</span>}
+            {type === 'calories' && value > target && (
+              <span className="text-red-500 ml-1">(+{Math.round(value - target)} over)</span>
+            )}
+            {type === 'protein' && value < target && (
+              <span className="text-red-500 ml-1">({Math.round(target - value)} to go)</span>
+            )}
           </p>
         </div>
       )}
@@ -256,7 +264,7 @@ function SecondaryCard({ label, value, low, high, unit, recommendation }: Second
     good: 'text-green-600 dark:text-green-400',
     warning: 'text-amber-600 dark:text-amber-400',
     bad: 'text-red-600 dark:text-red-400',
-    neutral: 'text-zinc-500 dark:text-zinc-400',
+    neutral: 'text-zinc-700 dark:text-zinc-200',
   };
 
   const progressBarColor = {
@@ -266,8 +274,15 @@ function SecondaryCard({ label, value, low, high, unit, recommendation }: Second
     neutral: '#71717a',
   };
 
+  const bgColors = {
+    good: 'bg-green-50 dark:bg-green-950/30',
+    warning: 'bg-amber-50 dark:bg-amber-950/30',
+    bad: 'bg-red-50 dark:bg-red-950/30',
+    neutral: 'bg-zinc-100 dark:bg-zinc-800/50',
+  };
+
   return (
-    <div className="rounded-lg p-3 bg-zinc-100 dark:bg-zinc-800/50">
+    <div className={`rounded-lg p-3 ${bgColors[status]}`}>
       <div className="flex items-start justify-between">
         <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
         {recommendation && (
@@ -278,7 +293,7 @@ function SecondaryCard({ label, value, low, high, unit, recommendation }: Second
           </span>
         )}
       </div>
-      <p className="mt-0.5 text-lg font-semibold text-zinc-700 dark:text-zinc-200">
+      <p className={`mt-0.5 text-lg font-semibold ${statusColors[status]}`}>
         {Math.round(value)}
         <span className="text-xs font-normal text-zinc-400 ml-0.5">{unit}</span>
       </p>
