@@ -160,6 +160,7 @@ interface FoodItemRowProps {
 }
 
 function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
+  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -307,33 +308,25 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
   }
 
   return (
-    <div className="group flex items-start justify-between gap-4 text-sm">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-medium text-zinc-900 dark:text-zinc-100">{item.food_name}</p>
-          {item.has_override && (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              edited
-            </span>
+    <div className="text-sm">
+      {/* Tappable row */}
+      <div 
+        className="flex items-start justify-between gap-4 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-zinc-900 dark:text-zinc-100">{item.food_name}</p>
+            {item.has_override && (
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                edited
+              </span>
+            )}
+          </div>
+          {item.grams && (
+            <p className="text-zinc-500 dark:text-zinc-400">~{Math.round(item.grams)}g</p>
           )}
         </div>
-        {item.grams && (
-          <p className="text-zinc-500 dark:text-zinc-400">~{Math.round(item.grams)}g</p>
-        )}
-        {item.assumptions && item.assumptions.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {item.assumptions.map((assumption, i) => (
-              <span
-                key={i}
-                className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-              >
-                {assumption}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="flex items-start gap-2">
         <div className="text-right">
           <p className="font-medium text-zinc-900 dark:text-zinc-100">
             {Math.round(item.calories)} kcal
@@ -343,35 +336,52 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
             <span>C: {Math.round(item.carbs_g)}g</span>
             <span>F: {Math.round(item.fat_g)}g</span>
           </div>
-          <div className="mt-0.5 flex flex-wrap justify-end gap-x-2 gap-y-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
-            <span className="text-red-500/70">SF: {Math.round(item.saturated_fat_g || 0)}g</span>
-            <span className="text-pink-500/70">AS: {Math.round(item.added_sugar_g || 0)}g</span>
-            <span className="text-purple-500/70">Na: {Math.round(item.sodium_mg || 0)}mg</span>
-            <span className="text-emerald-500/70">Fb: {Math.round(item.fiber_g || 0)}g</span>
-          </div>
-        </div>
-        <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => setEditing(true)}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-            title="Edit"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/30"
-            title="Delete item"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
       </div>
+
+      {/* Expanded details + actions */}
+      {expanded && (
+        <div className="mt-2 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
+          {/* Additional nutrition details */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+            <span>Fiber: {Math.round(item.fiber_g || 0)}g</span>
+            <span>Added Sugar: {Math.round(item.added_sugar_g || 0)}g</span>
+            <span>Sat. Fat: {Math.round(item.saturated_fat_g || 0)}g</span>
+            <span>Sodium: {Math.round(item.sodium_mg || 0)}mg</span>
+          </div>
+
+          {/* Assumptions */}
+          {item.assumptions && item.assumptions.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-3">
+              {item.assumptions.map((assumption, i) => (
+                <span
+                  key={i}
+                  className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
+                >
+                  {assumption}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+              className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Edit
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+              disabled={deleting}
+              className="rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-200 disabled:opacity-50 dark:bg-red-900/30 dark:text-red-400"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

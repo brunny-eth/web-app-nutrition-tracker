@@ -30,12 +30,12 @@ function getRecommendations(targetCalories?: number, sex?: 'male' | 'female' | n
       type: 'limit' as const,
       tip: '<10% of calories',
     },
-    // Sodium: <2300mg general, <1500mg ideal
+    // Sodium: <2750mg upper bound
     sodium: {
-      limit: 2300,
-      warning: 1500,
+      limit: 2750,
+      warning: 2300,
       type: 'limit' as const,
-      tip: '<2300mg (ideal <1500mg)',
+      tip: '<2750mg (ideal <2300mg)',
     },
     // Added sugar: 25g women, 36g men (AHA)
     addedSugar: {
@@ -96,12 +96,12 @@ export function DailySummary({
       {/* Secondary metrics - limits and targets */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SecondaryCard
-          label="Sat. Fat"
-          value={saturatedFat.value}
-          low={saturatedFat.low}
-          high={saturatedFat.high}
+          label="Fiber"
+          value={fiber.value}
+          low={fiber.low}
+          high={fiber.high}
           unit="g"
-          recommendation={recs.saturatedFat}
+          recommendation={recs.fiber}
         />
         <SecondaryCard
           label="Added Sugar"
@@ -112,20 +112,20 @@ export function DailySummary({
           recommendation={recs.addedSugar}
         />
         <SecondaryCard
+          label="Sat. Fat"
+          value={saturatedFat.value}
+          low={saturatedFat.low}
+          high={saturatedFat.high}
+          unit="g"
+          recommendation={recs.saturatedFat}
+        />
+        <SecondaryCard
           label="Sodium"
           value={sodium.value}
           low={sodium.low}
           high={sodium.high}
           unit="mg"
           recommendation={recs.sodium}
-        />
-        <SecondaryCard
-          label="Fiber"
-          value={fiber.value}
-          low={fiber.low}
-          high={fiber.high}
-          unit="g"
-          recommendation={recs.fiber}
         />
       </div>
     </div>
