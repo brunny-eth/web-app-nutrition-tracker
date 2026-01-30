@@ -38,16 +38,50 @@ export function FoodEntryForm({
       return;
     }
     
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      setError('Image must be less than 10MB');
+    if (file.size > 20 * 1024 * 1024) { // 20MB limit for original
+      setError('Image must be less than 20MB');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImage(e.target?.result as string);
+    // Compress and resize image before upload
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Max dimensions (good enough for reading nutrition labels)
+      const MAX_WIDTH = 1500;
+      const MAX_HEIGHT = 1500;
+      
+      let { width, height } = img;
+      
+      // Scale down if needed
+      if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+        const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      ctx?.drawImage(img, 0, 0, width, height);
+      
+      // Convert to JPEG with 85% quality (good balance of size vs quality)
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+      
+      setImage(compressedBase64);
       setImageName(file.name);
       setError('');
+    };
+    
+    img.onerror = () => {
+      setError('Failed to load image');
+    };
+    
+    // Load image from file
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
   }, []);
