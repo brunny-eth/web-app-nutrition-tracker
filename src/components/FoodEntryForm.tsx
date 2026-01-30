@@ -2,6 +2,11 @@
 
 import { useState } from 'react';
 
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+}
+
 interface FoodEntryFormProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
@@ -105,14 +110,25 @@ export function FoodEntryForm({
           >
             Yesterday
           </button>
+          <label
+            className={`relative px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
+              selectedDate !== today && selectedDate !== yesterday
+                ? 'bg-blue-600 text-white'
+                : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
+            }`}
+          >
+            {selectedDate !== today && selectedDate !== yesterday
+              ? formatDate(selectedDate)
+              : 'Pick date'}
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => onDateChange(e.target.value)}
+              max={today}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+          </label>
         </div>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => onDateChange(e.target.value)}
-          max={today}
-          className="ml-auto rounded-lg border border-zinc-200 px-2 py-1.5 text-sm text-zinc-600 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-        />
       </div>
 
       {error && (
