@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
@@ -23,12 +23,73 @@ export function FoodEntryForm({
   yesterday,
 }: FoodEntryFormProps) {
   const [text, setText] = useState('');
+  const [image, setImage] = useState<string | null>(null);
+  const [imageName, setImageName] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleImageFile = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      setError('Image must be less than 10MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImage(e.target?.result as string);
+      setImageName(file.name);
+      setError('');
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      handleImageFile(file);
+    }
+  }, [handleImageFile]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImageFile(file);
+    }
+  }, [handleImageFile]);
+
+  const removeImage = () => {
+    setImage(null);
+    setImageName('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || loading) return;
+    if ((!text.trim() && !image) || loading) return;
 
     setError('');
     setLoading(true);
@@ -38,7 +99,8 @@ export function FoodEntryForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          raw_text: text.trim(),
+          raw_text: text.trim() || (image ? '1 serving' : ''),
+          image: image || undefined,
           client_timestamp: new Date().toISOString(),
           override_date: selectedDate !== today ? selectedDate : undefined,
         }),
@@ -50,6 +112,8 @@ export function FoodEntryForm({
       }
 
       setText('');
+      setImage(null);
+      setImageName('');
       onEntryCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to log food');
@@ -58,33 +122,105 @@ export function FoodEntryForm({
     }
   };
 
+  const canSubmit = text.trim() || image;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div>
+      {/* Text area with drag-drop support */}
+      <div
+        className={`relative rounded-xl border-2 transition-colors ${
+          isDragging 
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20' 
+            : 'border-zinc-200 dark:border-zinc-700'
+        }`}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+      >
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Add food you ate here, and be as descriptive as possible for the best results. You can do 1 message a day or multiple throughout the day. E.g., '3 scrambled eggs, cooked with 1 pat butter, 2 slices Dave's Killer Bread toast'"          rows={5}
-          className="block w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          placeholder={image 
+            ? "Add details (optional) - e.g., '2 servings' or 'half portion'"
+            : "Log food here, or drag & drop a photo of nutrition facts/menu"
+          }
+          rows={4}
+          className="block w-full resize-none rounded-xl border-0 bg-transparent px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100"
           disabled={loading}
         />
+        
+        {isDragging && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-blue-50/90 dark:bg-blue-950/90">
+            <p className="text-blue-600 dark:text-blue-400 font-medium">Drop image here</p>
+          </div>
+        )}
       </div>
 
-      <button
-        type="submit"
-        disabled={loading || !text.trim()}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading ? (
-          <>
-            <LoadingSpinner />
-            Parsing...
-          </>
-        ) : (
-          'Log Food'
-        )}
-      </button>
+      {/* Image preview */}
+      {image && (
+        <div className="relative inline-block">
+          <img 
+            src={image} 
+            alt="Preview" 
+            className="h-20 w-auto rounded-lg border border-zinc-200 dark:border-zinc-700"
+          />
+          <button
+            type="button"
+            onClick={removeImage}
+            className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
+          >
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <p className="mt-1 text-xs text-zinc-500 truncate max-w-[150px]">{imageName}</p>
+        </div>
+      )}
 
+      {/* Action buttons row */}
+      <div className="flex gap-2">
+        {/* Photo button (mobile-friendly) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          title="Add photo of nutrition facts or menu"
+        >
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span className="hidden sm:inline">Photo</span>
+        </button>
+
+        {/* Submit button */}
+        <button
+          type="submit"
+          disabled={loading || !canSubmit}
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? (
+            <>
+              <LoadingSpinner />
+              Parsing...
+            </>
+          ) : (
+            'Log Food'
+          )}
+        </button>
+      </div>
+
+      {/* Date selector */}
       <div className="flex items-center gap-2">
         <span className="text-sm text-zinc-500 dark:text-zinc-400">Log for:</span>
         <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
@@ -130,6 +266,13 @@ export function FoodEntryForm({
           </label>
         </div>
       </div>
+
+      {/* Helper text for photos */}
+      {!image && (
+        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+          Tip: Use photos for nutrition labels or menus only (not photos of food)
+        </p>
+      )}
 
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>

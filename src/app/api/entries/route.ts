@@ -15,10 +15,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { raw_text, client_timestamp, override_date } = await request.json();
+    const { raw_text, image, client_timestamp, override_date } = await request.json();
 
-    if (!raw_text || typeof raw_text !== 'string' || raw_text.trim().length === 0) {
-      return NextResponse.json({ error: 'Food description required' }, { status: 400 });
+    // Need either text or image
+    if ((!raw_text || raw_text.trim().length === 0) && !image) {
+      return NextResponse.json({ error: 'Food description or image required' }, { status: 400 });
     }
 
     const supabase = createServerClient();
@@ -33,8 +34,12 @@ export async function POST(request: NextRequest) {
     const timezone = settings?.timezone || 'America/New_York';
     const today = getTodayInTimezone(timezone);
 
-    // Parse the meal with GPT-4o
-    const parsedMeal = await parseMealDescription(raw_text.trim(), today);
+    // Parse the meal with GPT-4o (with optional image)
+    const parsedMeal = await parseMealDescription(
+      raw_text?.trim() || '1 serving', 
+      today, 
+      image || undefined
+    );
 
     // Validate the response
     const validation = validateParsedMeal(parsedMeal);

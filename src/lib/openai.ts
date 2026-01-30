@@ -6,7 +6,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const SYSTEM_PROMPT = `You are a nutrition analysis assistant. Your job is to parse free-form meal descriptions and return structured nutritional data.
+const SYSTEM_PROMPT = `You are a nutrition analysis assistant. Your job is to parse meal descriptions (text and/or images) and return structured nutritional data.
 
 RULES:
 1. NEVER ask clarifying questions. Make reasonable assumptions and list them.
@@ -40,39 +40,81 @@ NUTRITIONAL DATA:
   - Vegetables
   Examples: A banana = 0g added sugar. Sweetened yogurt = count the added sweetener only. Soda = all sugar is added. Honey in tea = added sugar.
 
+IMAGE HANDLING:
+- If an image is attached, analyze it for nutritional information
+- VALID images: nutrition facts labels, menus with nutritional info, food packaging
+- INVALID images: photos of actual food/meals (we cannot estimate nutrition from food photos)
+- If image shows actual food (not a label), add to assumptions: "ERROR: Cannot analyze photos of food. Please photograph nutrition labels or menus instead."
+- For valid images: extract the nutrition facts shown and apply any quantity mentioned in the text (e.g., "2 bags" = multiply by 2)
+- Combine image data with any other foods mentioned in the text
+
 OUTPUT FORMAT:
-- Return a list of food items with their nutritional breakdown
+- Return a list of ALL food items (from both text AND image)
 - Each item should be a distinct food (e.g., "grilled chicken breast", "steamed broccoli")
 - Combine similar items if they're clearly one dish (e.g., "chicken stir fry with vegetables")
 - List assumptions made for transparency`;
 
 /**
  * Parse a meal description using GPT-4o with structured output
+ * Supports text, images, or both combined
  */
 export async function parseMealDescription(
   mealText: string,
-  todayDate: string // YYYY-MM-DD format, in user's timezone
+  todayDate: string, // YYYY-MM-DD format, in user's timezone
+  imageBase64?: string // Optional base64 image data
 ): Promise<ParsedMeal> {
-  const userPrompt = `Today's date is ${todayDate}.
-
-Parse the following meal description and return structured nutritional data:
-
-"${mealText}"`;
+  // Build user message content
+  const userContent: OpenAI.Chat.ChatCompletionContentPart[] = [];
+  
+  // Add image if provided
+  if (imageBase64) {
+    userContent.push({
+      type: 'image_url',
+      image_url: {
+        url: imageBase64,
+        detail: 'high',
+      },
+    });
+  }
+  
+  // Build text prompt
+  let textPrompt = `Today's date is ${todayDate}.\n\n`;
+  
+  if (imageBase64 && mealText && mealText !== '1 serving') {
+    // Both image and meaningful text
+    textPrompt += `Parse this meal. The image shows a nutrition label/menu. The user's description is: "${mealText}"\n\nExtract nutrition from the image AND parse any other foods mentioned in the text.`;
+  } else if (imageBase64) {
+    // Image only (or image with default "1 serving" text)
+    textPrompt += `Extract nutritional data from this image. Assume 1 serving unless otherwise indicated.`;
+  } else {
+    // Text only
+    textPrompt += `Parse the following meal description and return structured nutritional data:\n\n"${mealText}"`;
+  }
+  
+  userContent.push({ type: 'text', text: textPrompt });
 
   const response = await openai.chat.completions.parse({
     model: 'gpt-4o',
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt },
+      { role: 'user', content: userContent },
     ],
     response_format: zodResponseFormat(ParsedMealSchema, 'parsed_meal'),
-    temperature: 0.3, // Lower temperature for more consistent estimates
+    temperature: 0.3,
   });
 
   const parsed = response.choices[0].message.parsed;
   
   if (!parsed) {
     throw new Error('Failed to parse meal description');
+  }
+
+  // Check for image validation error in assumptions
+  for (const item of parsed.items) {
+    if (item.assumptions?.some(a => a.includes('ERROR:'))) {
+      const errorMsg = item.assumptions.find(a => a.includes('ERROR:'));
+      throw new Error(errorMsg?.replace('ERROR: ', '') || 'Image validation failed');
+    }
   }
 
   return parsed;
