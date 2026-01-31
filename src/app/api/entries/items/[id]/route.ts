@@ -53,7 +53,7 @@ export async function PATCH(
       protein_g,
       carbs_g,
       fat_g,
-      grams,
+      fiber_g,
     } = body;
 
     // Validation: no negatives, minimum 5 calories
@@ -69,8 +69,8 @@ export async function PATCH(
     if (fat_g !== undefined && fat_g < 0) {
       return NextResponse.json({ error: 'Fat cannot be negative' }, { status: 400 });
     }
-    if (grams !== undefined && grams !== null && grams < 0) {
-      return NextResponse.json({ error: 'Grams cannot be negative' }, { status: 400 });
+    if (fiber_g !== undefined && fiber_g < 0) {
+      return NextResponse.json({ error: 'Fiber cannot be negative' }, { status: 400 });
     }
 
     const supabase = getSupabase();
@@ -143,14 +143,9 @@ export async function PATCH(
       if (!overriddenFields.includes('fat_g')) overriddenFields.push('fat_g');
     }
 
-    if (grams !== undefined && grams !== current.grams) {
-      updates.grams = grams;
-      if (grams && current.grams) {
-        const ratio = grams / current.grams;
-        updates.grams_low = Math.round(current.grams_low * ratio);
-        updates.grams_high = Math.round(current.grams_high * ratio);
-      }
-      if (!overriddenFields.includes('grams')) overriddenFields.push('grams');
+    if (fiber_g !== undefined && fiber_g !== current.fiber_g) {
+      updates.fiber_g = fiber_g;
+      if (!overriddenFields.includes('fiber_g')) overriddenFields.push('fiber_g');
     }
 
     updates.override_fields = overriddenFields;

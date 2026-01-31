@@ -170,7 +170,7 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
   const [protein, setProtein] = useState(item.protein_g.toString());
   const [carbs, setCarbs] = useState(item.carbs_g.toString());
   const [fat, setFat] = useState(item.fat_g.toString());
-  const [grams, setGrams] = useState(item.grams?.toString() || '');
+  const [fiber, setFiber] = useState((item.fiber_g || 0).toString());
 
   const handleSave = async () => {
     setSaving(true);
@@ -184,7 +184,7 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
           protein_g: parseFloat(protein) || 0,
           carbs_g: parseFloat(carbs) || 0,
           fat_g: parseFloat(fat) || 0,
-          grams: grams ? parseFloat(grams) : null,
+          fiber_g: parseFloat(fiber) || 0,
         }),
       });
 
@@ -216,7 +216,7 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
     setProtein(item.protein_g.toString());
     setCarbs(item.carbs_g.toString());
     setFat(item.fat_g.toString());
-    setGrams(item.grams?.toString() || '');
+    setFiber((item.fiber_g || 0).toString());
     setEditing(false);
   };
 
@@ -275,13 +275,13 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">Grams</label>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">Fiber (g)</label>
               <input
                 type="number"
-                value={grams}
-                onChange={(e) => setGrams(e.target.value)}
+                step="0.1"
+                value={fiber}
+                onChange={(e) => setFiber(e.target.value)}
                 className="mt-1 block w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
-                placeholder="—"
               />
             </div>
           </div>
@@ -365,7 +365,7 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
           </div>
 
           {/* Action icon buttons */}
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-3.5">
             <button
               onClick={() => setEditing(true)}
               className="rounded p-1 text-zinc-300 transition-colors hover:bg-zinc-100 hover:text-blue-600 dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400"
