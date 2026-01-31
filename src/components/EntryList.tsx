@@ -160,7 +160,6 @@ interface FoodItemRowProps {
 }
 
 function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
-  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -309,11 +308,9 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
 
   return (
     <div className="text-sm">
-      {/* Tappable row */}
-      <div 
-        className="flex items-start justify-between gap-4 cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-      >
+      {/* Main row */}
+      <div className="flex items-start justify-between gap-4">
+        {/* Left side: food name, weight, assumptions */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="font-medium text-zinc-900 dark:text-zinc-100">{item.food_name}</p>
@@ -323,65 +320,74 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
               </span>
             )}
           </div>
+          
           {item.grams && (
-            <p className="text-zinc-500 dark:text-zinc-400">~{Math.round(item.grams)}g</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">~{Math.round(item.grams)}g</p>
           )}
-        </div>
-        <div className="text-right">
-          <p className="font-medium text-zinc-900 dark:text-zinc-100">
-            {Math.round(item.calories)} kcal
-          </p>
-          <div className="mt-1 flex flex-wrap justify-end gap-x-2 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            <span className="text-green-600 dark:text-green-400">P: {Math.round(item.protein_g)}g</span>
-            <span>C: {Math.round(item.carbs_g)}g</span>
-            <span>F: {Math.round(item.fat_g)}g</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Expanded details + actions */}
-      {expanded && (
-        <div className="mt-2 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
-          {/* Additional nutrition details */}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400 mb-3">
-            <span>Fiber: {Math.round(item.fiber_g || 0)}g</span>
-            <span>Added Sugar: {Math.round(item.added_sugar_g || 0)}g</span>
-            <span>Sat. Fat: {Math.round(item.saturated_fat_g || 0)}g</span>
-            <span>Sodium: {Math.round(item.sodium_mg || 0)}mg</span>
-          </div>
 
           {/* Assumptions */}
           {item.assumptions && item.assumptions.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3">
+            <div className="mt-1.5 flex flex-wrap gap-1">
               {item.assumptions.map((assumption, i) => (
                 <span
                   key={i}
-                  className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
+                  className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
                 >
                   {assumption}
                 </span>
               ))}
             </div>
           )}
+        </div>
 
-          {/* Action buttons */}
-          <div className="flex gap-2">
+        {/* Right side: all nutrition stats + action icons */}
+        <div className="flex items-start gap-3">
+          {/* Nutrition stats grid */}
+          <div className="text-right text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+            {/* Calories - prominent */}
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              {Math.round(item.calories)} kcal
+            </p>
+            
+            {/* All other stats in uniform style */}
+            <div className="mt-1 flex justify-end gap-x-3">
+              <span>Protein {Math.round(item.protein_g)}g</span>
+              <span>Carbs {Math.round(item.carbs_g)}g</span>
+            </div>
+            <div className="flex justify-end gap-x-3">
+              <span>Fiber {Math.round(item.fiber_g || 0)}g</span>
+              <span>Sugar {Math.round(item.added_sugar_g || 0)}g</span>
+            </div>
+            <div className="flex justify-end gap-x-3">
+              <span>Sat Fat {Math.round(item.saturated_fat_g || 0)}g</span>
+              <span>Sodium {Math.round(item.sodium_mg || 0)}mg</span>
+            </div>
+          </div>
+
+          {/* Action icon buttons */}
+          <div className="flex flex-col gap-0.5">
             <button
-              onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-              className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              onClick={() => setEditing(true)}
+              className="rounded p-1 text-zinc-300 transition-colors hover:bg-zinc-100 hover:text-blue-600 dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-blue-400"
+              title="Edit item"
             >
-              Edit
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+              onClick={handleDelete}
               disabled={deleting}
-              className="rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-200 disabled:opacity-50 dark:bg-red-900/30 dark:text-red-400"
+              className="rounded p-1 text-zinc-300 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:text-zinc-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+              title="Delete item"
             >
-              {deleting ? 'Deleting...' : 'Delete'}
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
             </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
