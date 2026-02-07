@@ -53,7 +53,47 @@ OUTPUT FORMAT:
 - Return a list of ALL food items (from both text AND image)
 - Each item should be a distinct food (e.g., "grilled chicken breast", "steamed broccoli")
 - Combine similar items if they're clearly one dish (e.g., "chicken stir fry with vegetables")
-- List assumptions made for transparency`;
+- List assumptions made for transparency
+
+EXAMPLES:
+
+Example 1 - Simple item with specific quantity (tight ±10% bounds):
+Input: "2 scrambled eggs"
+Output: 1 item - "scrambled eggs" (2 large eggs)
+  calories: 180, protein: 12.6g, carbs: 1.2g, fat: 13.2g, sat_fat: 4.2g, fiber: 0g, sodium: 140mg, added_sugar: 0g, potassium: 140mg
+  Assumptions: 2 large eggs, scrambled with minimal fat, no added cheese or milk.
+
+Example 2 - Multi-item homemade meal (separate items, tight bounds):
+Input: "Grilled chicken with rice and steamed broccoli"
+Output: 3 items
+  1. "grilled chicken breast" (6 oz cooked): 280 cal, 52g protein, 0g carbs, 6g fat, 1.6g sat_fat, 0g fiber, 120mg sodium, 0g added_sugar, 700mg potassium
+     Assumptions: Boneless skinless breast, light seasoning, no heavy sauce.
+  2. "cooked white rice" (1 cup): 205 cal, 4.3g protein, 44.5g carbs, 0.4g fat, 0.1g sat_fat, 0.6g fiber, 0mg sodium, 0g added_sugar, 55mg potassium
+     Assumptions: Plain white rice, no butter/oil.
+  3. "steamed broccoli" (1 cup): 55 cal, 3.7g protein, 11.2g carbs, 0.6g fat, 0.1g sat_fat, 5.1g fiber, 60mg sodium, 0g added_sugar, 460mg potassium
+     Assumptions: Plain steamed, no butter/oil.
+
+Example 3 - Vague description (wider ±20% bounds):
+Input: "A bowl of pasta with meat sauce"
+Output: 1 item - "pasta with meat sauce" (~2 cups pasta + 3/4 cup sauce)
+  calories: 720 (576-864), protein: 32g (25.6-38.4), carbs: 95g (76-114), fat: 24g (19.2-28.8), sat_fat: 8g, fiber: 6g, sodium: 1050mg, added_sugar: 3g, potassium: 700mg
+  Assumptions: Description vague - used ±20% bounds. Medium bowl = ~2 cups pasta + typical meat/tomato sauce. Beef-based with typical oil/salt. Added sugar from tomato sauce.
+
+Example 4 - Restaurant meal (known portions, tight bounds):
+Input: "Chipotle burrito bowl with chicken, rice, black beans, cheese, and salsa"
+Output: 1 item - "Chipotle-style burrito bowl"
+  calories: 760, protein: 48g, carbs: 82g, fat: 26g, sat_fat: 9.5g, fiber: 14g, sodium: 1650mg, added_sugar: 2g, potassium: 1100mg
+  Assumptions: Standard fast-casual portions (1 scoop each). No guac, sour cream, or tortilla. High sodium from seasoned ingredients.
+
+Example 5 - Added sugar vs natural sugar distinction:
+Input: "Greek yogurt with honey and banana"
+Output: 3 items
+  1. "nonfat plain Greek yogurt" (1 cup): 130 cal, 23g protein, 9g carbs, 0.7g fat, 0.2g sat_fat, 0g fiber, 85mg sodium, 0g added_sugar, 300mg potassium
+     Assumptions: Plain unsweetened. Lactose counted as carbs, not added sugar.
+  2. "honey" (1 tbsp): 64 cal, 0g protein, 17g carbs, 0g fat, 0g sat_fat, 0g fiber, 1mg sodium, 17g added_sugar, 10mg potassium
+     Assumptions: Honey is fully counted as added sugar.
+  3. "banana" (1 medium): 105 cal, 1.3g protein, 27g carbs, 0.4g fat, 0.1g sat_fat, 3.1g fiber, 1mg sodium, 0g added_sugar, 420mg potassium
+     Assumptions: Banana sugars are natural - added_sugar = 0.`;
 
 /**
  * Parse a meal description using GPT-4o with structured output
