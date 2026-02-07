@@ -13,6 +13,7 @@ interface DailySummaryProps {
   fiber: NutrientValue;
   addedSugar: NutrientValue;
   sodium: NutrientValue;
+  potassium: NutrientValue;
   targetCalories?: number;
   targetProtein?: number;
   sex?: 'male' | 'female' | null;
@@ -49,6 +50,12 @@ function getRecommendations(targetCalories?: number, sex?: 'male' | 'female' | n
       type: 'target' as const,
       tip: isMale ? '38g daily goal' : '25g daily goal',
     },
+    // Potassium: 3500-4700mg recommended
+    potassium: {
+      target: 3500,
+      type: 'target' as const,
+      tip: '>3500mg daily goal',
+    },
   };
 }
 
@@ -59,11 +66,15 @@ export function DailySummary({
   fiber,
   addedSugar,
   sodium,
+  potassium,
   targetCalories,
   targetProtein,
   sex,
 }: DailySummaryProps) {
   const recs = getRecommendations(targetCalories, sex);
+  
+  // Calculate K/Na ratio (ideal >1.5, ok >1, bad <1)
+  const kNaRatio = sodium.value > 0 ? potassium.value / sodium.value : 0;
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
@@ -119,14 +130,7 @@ export function DailySummary({
           unit="g"
           recommendation={recs.saturatedFat}
         />
-        <SecondaryCard
-          label="Sodium"
-          value={sodium.value}
-          low={sodium.low}
-          high={sodium.high}
-          unit="mg"
-          recommendation={recs.sodium}
-        />
+        <KNaRatioCard ratio={kNaRatio} potassium={potassium.value} sodium={sodium.value} />
       </div>
     </div>
   );
@@ -320,6 +324,70 @@ function SecondaryCard({ label, value, low, high, unit, recommendation }: Second
       
       <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
         {Math.round(low)}–{Math.round(high)} range
+      </p>
+    </div>
+  );
+}
+
+interface KNaRatioCardProps {
+  ratio: number;
+  potassium: number;
+  sodium: number;
+}
+
+function KNaRatioCard({ ratio, potassium, sodium }: KNaRatioCardProps) {
+  // K/Na ratio: ideal >1.5, ok >1, bad <1
+  let status: 'good' | 'warning' | 'bad' | 'neutral' = 'neutral';
+  let statusText = '';
+  
+  if (sodium === 0 && potassium === 0) {
+    status = 'neutral';
+    statusText = 'No data';
+  } else if (sodium === 0) {
+    status = 'good';
+    statusText = 'Great!';
+  } else if (ratio >= 1.5) {
+    status = 'good';
+    statusText = 'Ideal balance';
+  } else if (ratio >= 1) {
+    status = 'warning';
+    statusText = 'OK, could improve';
+  } else {
+    status = 'bad';
+    statusText = 'Too much sodium';
+  }
+
+  const statusColors = {
+    good: 'text-green-600 dark:text-green-400',
+    warning: 'text-amber-600 dark:text-amber-400',
+    bad: 'text-red-600 dark:text-red-400',
+    neutral: 'text-zinc-700 dark:text-zinc-200',
+  };
+
+  const bgColors = {
+    good: 'bg-green-50 dark:bg-green-950/30',
+    warning: 'bg-amber-50 dark:bg-amber-950/30',
+    bad: 'bg-red-50 dark:bg-red-950/30',
+    neutral: 'bg-zinc-100 dark:bg-zinc-800/50',
+  };
+
+  return (
+    <div className={`rounded-lg p-3 ${bgColors[status]}`}>
+      <div className="flex items-start justify-between">
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">K/Na Ratio</p>
+        <span className="text-[10px] text-zinc-400" title="Potassium to sodium ratio. Ideal >1.5:1">
+          {'>'}1.5 ideal
+        </span>
+      </div>
+      <p className={`mt-0.5 text-lg font-semibold ${statusColors[status]}`}>
+        {ratio > 0 ? ratio.toFixed(2) : '—'}
+        <span className="text-xs font-normal text-zinc-400 ml-0.5">:1</span>
+      </p>
+      <p className={`mt-1 text-[10px] ${statusColors[status]}`}>
+        {statusText}
+      </p>
+      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+        {Math.round(potassium)}mg K / {Math.round(sodium)}mg Na
       </p>
     </div>
   );

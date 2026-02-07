@@ -54,6 +54,9 @@ interface Entry {
     sodium_mg: number;
     sodium_low: number;
     sodium_high: number;
+    potassium_mg: number;
+    potassium_low: number;
+    potassium_high: number;
     grams: number | null;
     assumptions: string[];
   }[];
@@ -173,6 +176,9 @@ export default function Home() {
         acc.sodium.value += item.sodium_mg || 0;
         acc.sodium.low += item.sodium_low || 0;
         acc.sodium.high += item.sodium_high || 0;
+        acc.potassium.value += item.potassium_mg || 0;
+        acc.potassium.low += item.potassium_low || 0;
+        acc.potassium.high += item.potassium_high || 0;
       });
       return acc;
     },
@@ -185,6 +191,7 @@ export default function Home() {
       fiber: { value: 0, low: 0, high: 0 },
       addedSugar: { value: 0, low: 0, high: 0 },
       sodium: { value: 0, low: 0, high: 0 },
+      potassium: { value: 0, low: 0, high: 0 },
     }
   );
 
@@ -302,6 +309,7 @@ export default function Home() {
               fiber={totals.fiber}
               addedSugar={totals.addedSugar}
               sodium={totals.sodium}
+              potassium={totals.potassium}
               targetCalories={targetCalories}
               targetProtein={targetProtein}
               sex={authStatus.settings?.sex}

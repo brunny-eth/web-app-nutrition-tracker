@@ -33,6 +33,9 @@ export const FoodItemSchema = z.object({
   added_sugar_g: z.number().describe('Added sugar in grams (excludes natural sugars from whole fruits/dairy)'),
   added_sugar_low: z.number().describe('Low estimate (90% CI)'),
   added_sugar_high: z.number().describe('High estimate (90% CI)'),
+  potassium_mg: z.number().describe('Potassium in milligrams'),
+  potassium_low: z.number().describe('Low estimate (90% CI)'),
+  potassium_high: z.number().describe('High estimate (90% CI)'),
   assumptions: z.array(z.string()).describe('List of assumptions made (e.g., "assumed olive oil for cooking", "medium sized portion")'),
 });
 
@@ -85,6 +88,7 @@ export interface DailySummary {
     fiber: { value: number; low: number; high: number };
     sodium: { value: number; low: number; high: number };
     added_sugar: { value: number; low: number; high: number };
+    potassium: { value: number; low: number; high: number };
   };
   entries: EntryWithItems[];
 }

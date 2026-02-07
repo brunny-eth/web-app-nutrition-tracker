@@ -48,7 +48,8 @@ export async function GET(request: NextRequest) {
         saturated_fat_g,
         fiber_g,
         added_sugar_g,
-        sodium_mg
+        sodium_mg,
+        potassium_mg
       )
     `)
     .eq('user_id', userId)
@@ -93,6 +94,7 @@ export async function GET(request: NextRequest) {
     fiber: number;
     addedSugar: number;
     sodium: number;
+    potassium: number;
     tdee: number | null;
     targetCalories: number | null;
     targetProtein: number | null;
@@ -121,6 +123,7 @@ export async function GET(request: NextRequest) {
         fiber: 0,
         addedSugar: 0,
         sodium: 0,
+        potassium: 0,
         tdee,
         targetCalories,
         targetProtein,
@@ -136,6 +139,7 @@ export async function GET(request: NextRequest) {
       dailyData[date].fiber += item.fiber_g || 0;
       dailyData[date].addedSugar += item.added_sugar_g || 0;
       dailyData[date].sodium += item.sodium_mg || 0;
+      dailyData[date].potassium += item.potassium_mg || 0;
     });
   });
 
@@ -147,6 +151,9 @@ export async function GET(request: NextRequest) {
       deficit: data.tdee ? data.tdee - data.calories : null,
       proteinPercent: data.targetProtein 
         ? Math.round((data.protein / data.targetProtein) * 100) 
+        : null,
+      kNaRatio: data.sodium > 0 && data.potassium > 0 
+        ? data.potassium / data.sodium 
         : null,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -166,6 +173,7 @@ export async function GET(request: NextRequest) {
     
     const withDeficit = data.filter(d => d.deficit !== null);
     const withProtein = data.filter(d => d.proteinPercent !== null);
+    const withKNaRatio = data.filter(d => d.kNaRatio !== null);
 
     return {
       avgCalories: Math.round(data.reduce((sum, d) => sum + d.calories, 0) / data.length),
@@ -179,6 +187,10 @@ export async function GET(request: NextRequest) {
       avgSaturatedFat: Math.round(data.reduce((sum, d) => sum + d.saturatedFat, 0) / data.length),
       avgAddedSugar: Math.round(data.reduce((sum, d) => sum + d.addedSugar, 0) / data.length),
       avgSodium: Math.round(data.reduce((sum, d) => sum + d.sodium, 0) / data.length),
+      avgPotassium: Math.round(data.reduce((sum, d) => sum + d.potassium, 0) / data.length),
+      avgKNaRatio: withKNaRatio.length > 0
+        ? withKNaRatio.reduce((sum, d) => sum + (d.kNaRatio || 0), 0) / withKNaRatio.length
+        : null,
       avgFiber: Math.round(data.reduce((sum, d) => sum + d.fiber, 0) / data.length),
       daysTracked: data.length,
     };

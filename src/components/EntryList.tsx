@@ -15,6 +15,7 @@ interface FoodItem {
   fiber_g: number;
   added_sugar_g: number;
   sodium_mg: number;
+  potassium_mg: number;
   grams: number | null;
   assumptions: string[];
   has_override?: boolean;
@@ -171,6 +172,10 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
   const [carbs, setCarbs] = useState(item.carbs_g.toString());
   const [fat, setFat] = useState(item.fat_g.toString());
   const [fiber, setFiber] = useState((item.fiber_g || 0).toString());
+  const [sugar, setSugar] = useState((item.added_sugar_g || 0).toString());
+  const [satFat, setSatFat] = useState((item.saturated_fat_g || 0).toString());
+  const [sodium, setSodium] = useState((item.sodium_mg || 0).toString());
+  const [potassium, setPotassium] = useState((item.potassium_mg || 0).toString());
 
   const handleSave = async () => {
     setSaving(true);
@@ -185,6 +190,10 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
           carbs_g: parseFloat(carbs) || 0,
           fat_g: parseFloat(fat) || 0,
           fiber_g: parseFloat(fiber) || 0,
+          added_sugar_g: parseFloat(sugar) || 0,
+          saturated_fat_g: parseFloat(satFat) || 0,
+          sodium_mg: parseFloat(sodium) || 0,
+          potassium_mg: parseFloat(potassium) || 0,
         }),
       });
 
@@ -217,6 +226,10 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
     setCarbs(item.carbs_g.toString());
     setFat(item.fat_g.toString());
     setFiber((item.fiber_g || 0).toString());
+    setSugar((item.added_sugar_g || 0).toString());
+    setSatFat((item.saturated_fat_g || 0).toString());
+    setSodium((item.sodium_mg || 0).toString());
+    setPotassium((item.potassium_mg || 0).toString());
     setEditing(false);
   };
 
@@ -234,7 +247,7 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">Calories</label>
               <input
@@ -281,6 +294,46 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
                 step="0.1"
                 value={fiber}
                 onChange={(e) => setFiber(e.target.value)}
+                className="mt-1 block w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">Sugar (g)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={sugar}
+                onChange={(e) => setSugar(e.target.value)}
+                className="mt-1 block w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">Sat Fat (g)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={satFat}
+                onChange={(e) => setSatFat(e.target.value)}
+                className="mt-1 block w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">Sodium (mg)</label>
+              <input
+                type="number"
+                step="1"
+                value={sodium}
+                onChange={(e) => setSodium(e.target.value)}
+                className="mt-1 block w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">Potassium (mg)</label>
+              <input
+                type="number"
+                step="1"
+                value={potassium}
+                onChange={(e) => setPotassium(e.target.value)}
                 className="mt-1 block w-full rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
               />
             </div>
@@ -361,6 +414,9 @@ function FoodItemRow({ item, onUpdate }: FoodItemRowProps) {
             <div className="flex justify-end gap-x-3">
               <span>Sat Fat {Math.round(item.saturated_fat_g || 0)}g</span>
               <span>Sodium {Math.round(item.sodium_mg || 0)}mg</span>
+            </div>
+            <div className="flex justify-end gap-x-3">
+              <span>Potassium {Math.round(item.potassium_mg || 0)}mg</span>
             </div>
           </div>
 

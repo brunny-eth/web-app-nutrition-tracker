@@ -54,6 +54,10 @@ export async function PATCH(
       carbs_g,
       fat_g,
       fiber_g,
+      added_sugar_g,
+      saturated_fat_g,
+      sodium_mg,
+      potassium_mg,
     } = body;
 
     // Validation: no negatives, minimum 5 calories
@@ -71,6 +75,18 @@ export async function PATCH(
     }
     if (fiber_g !== undefined && fiber_g < 0) {
       return NextResponse.json({ error: 'Fiber cannot be negative' }, { status: 400 });
+    }
+    if (added_sugar_g !== undefined && added_sugar_g < 0) {
+      return NextResponse.json({ error: 'Sugar cannot be negative' }, { status: 400 });
+    }
+    if (saturated_fat_g !== undefined && saturated_fat_g < 0) {
+      return NextResponse.json({ error: 'Saturated fat cannot be negative' }, { status: 400 });
+    }
+    if (sodium_mg !== undefined && sodium_mg < 0) {
+      return NextResponse.json({ error: 'Sodium cannot be negative' }, { status: 400 });
+    }
+    if (potassium_mg !== undefined && potassium_mg < 0) {
+      return NextResponse.json({ error: 'Potassium cannot be negative' }, { status: 400 });
     }
 
     const supabase = getSupabase();
@@ -146,6 +162,26 @@ export async function PATCH(
     if (fiber_g !== undefined && fiber_g !== current.fiber_g) {
       updates.fiber_g = fiber_g;
       if (!overriddenFields.includes('fiber_g')) overriddenFields.push('fiber_g');
+    }
+
+    if (added_sugar_g !== undefined && added_sugar_g !== current.added_sugar_g) {
+      updates.added_sugar_g = added_sugar_g;
+      if (!overriddenFields.includes('added_sugar_g')) overriddenFields.push('added_sugar_g');
+    }
+
+    if (saturated_fat_g !== undefined && saturated_fat_g !== current.saturated_fat_g) {
+      updates.saturated_fat_g = saturated_fat_g;
+      if (!overriddenFields.includes('saturated_fat_g')) overriddenFields.push('saturated_fat_g');
+    }
+
+    if (sodium_mg !== undefined && sodium_mg !== current.sodium_mg) {
+      updates.sodium_mg = sodium_mg;
+      if (!overriddenFields.includes('sodium_mg')) overriddenFields.push('sodium_mg');
+    }
+
+    if (potassium_mg !== undefined && potassium_mg !== current.potassium_mg) {
+      updates.potassium_mg = potassium_mg;
+      if (!overriddenFields.includes('potassium_mg')) overriddenFields.push('potassium_mg');
     }
 
     updates.override_fields = overriddenFields;

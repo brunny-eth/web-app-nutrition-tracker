@@ -117,6 +117,9 @@ export async function POST(request: NextRequest) {
       added_sugar_g: item.added_sugar_g,
       added_sugar_low: item.added_sugar_low,
       added_sugar_high: item.added_sugar_high,
+      potassium_mg: item.potassium_mg,
+      potassium_low: item.potassium_low,
+      potassium_high: item.potassium_high,
       assumptions: item.assumptions,
     }));
 

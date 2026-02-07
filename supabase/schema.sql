@@ -144,9 +144,13 @@ CREATE TABLE entry_items (
   sodium_low DECIMAL(8,2) DEFAULT 0,
   sodium_high DECIMAL(8,2) DEFAULT 0,
   
-  sugar_g DECIMAL(6,2) DEFAULT 0,
-  sugar_low DECIMAL(6,2) DEFAULT 0,
-  sugar_high DECIMAL(6,2) DEFAULT 0,
+  added_sugar_g DECIMAL(6,2) DEFAULT 0,
+  added_sugar_low DECIMAL(6,2) DEFAULT 0,
+  added_sugar_high DECIMAL(6,2) DEFAULT 0,
+  
+  potassium_mg DECIMAL(8,2) DEFAULT 0,
+  potassium_low DECIMAL(8,2) DEFAULT 0,
+  potassium_high DECIMAL(8,2) DEFAULT 0,
   
   -- LLM assumptions for auditability
   assumptions JSONB DEFAULT '[]',
@@ -233,10 +237,15 @@ SELECT
   COALESCE(SUM(ei.sodium_low), 0) as total_sodium_low,
   COALESCE(SUM(ei.sodium_high), 0) as total_sodium_high,
   
-  -- Sugar
-  COALESCE(SUM(ei.sugar_g), 0) as total_sugar,
-  COALESCE(SUM(ei.sugar_low), 0) as total_sugar_low,
-  COALESCE(SUM(ei.sugar_high), 0) as total_sugar_high
+  -- Added Sugar
+  COALESCE(SUM(ei.added_sugar_g), 0) as total_added_sugar,
+  COALESCE(SUM(ei.added_sugar_low), 0) as total_added_sugar_low,
+  COALESCE(SUM(ei.added_sugar_high), 0) as total_added_sugar_high,
+  
+  -- Potassium
+  COALESCE(SUM(ei.potassium_mg), 0) as total_potassium,
+  COALESCE(SUM(ei.potassium_low), 0) as total_potassium_low,
+  COALESCE(SUM(ei.potassium_high), 0) as total_potassium_high
 
 FROM entries e
 LEFT JOIN entry_items ei ON ei.entry_id = e.id

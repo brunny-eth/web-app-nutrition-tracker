@@ -27,6 +27,8 @@ interface ChartDataPoint {
   fiber: number;
   addedSugar: number;
   sodium: number;
+  potassium: number;
+  kNaRatio: number | null;
   tdee: number | null;
   targetCalories: number | null;
   targetProtein: number | null;
@@ -42,6 +44,8 @@ interface Averages {
   avgSaturatedFat: number;
   avgAddedSugar: number;
   avgSodium: number;
+  avgPotassium: number;
+  avgKNaRatio: number | null;
   avgFiber: number;
   daysTracked: number;
 }
@@ -385,29 +389,33 @@ export default function TrendsPage() {
             )}
           </section>
 
-          {/* Sodium */}
+          {/* K/Na Ratio */}
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-100">
-              Sodium
+              K/Na Ratio
             </h2>
-            <p className="mb-4 text-xs text-zinc-500">Limit: &lt;{recommendations.sodiumLimit}mg/day</p>
+            <p className="mb-4 text-xs text-zinc-500">Target: &gt;1.5 (ideal), &gt;1 (ok)</p>
             {chartData.length === 0 ? (
               <p className="py-8 text-center text-zinc-500 text-sm">No data</p>
             ) : (
               <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={chartData.map(d => ({ ...d, sodiumLimit: recommendations.sodiumLimit }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <ComposedChart data={chartData.map(d => ({ ...d, idealRatio: 1.5, okRatio: 1.0 }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={[0, 'auto']} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                     labelFormatter={formatTooltipLabel}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(value: any, name: any) => [Math.round(value || 0) + 'mg', name]}
+                    formatter={(value: any, name: any) => {
+                      if (name === 'K/Na Ratio') return [value ? (value as number).toFixed(2) + ':1' : '—', name];
+                      return [(value as number).toFixed(1) + ':1', name];
+                    }}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
-                  <Line type="monotone" dataKey="sodiumLimit" stroke="#581c87" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Limit" connectNulls />
-                  <Line type="monotone" dataKey="sodium" stroke="#a855f7" strokeWidth={2} dot={{ r: 2 }} name="Consumed" connectNulls />
+                  <Line type="monotone" dataKey="idealRatio" stroke="#065f46" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Ideal (1.5)" connectNulls />
+                  <Line type="monotone" dataKey="okRatio" stroke="#92400e" strokeWidth={1} strokeDasharray="3 3" dot={false} name="OK (1.0)" connectNulls />
+                  <Line type="monotone" dataKey="kNaRatio" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} name="K/Na Ratio" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -501,6 +509,26 @@ export default function TrendsPage() {
                   <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgSodium ?? '—'}mg</td>
                   <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgSodium ?? '—'}mg</td>
                   <td className="py-2 text-right text-zinc-500">&lt;{recommendations.sodiumLimit}mg</td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Potassium</td>
+                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgPotassium ?? '—'}mg</td>
+                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgPotassium ?? '—'}mg</td>
+                  <td className="py-2 text-right text-zinc-500">&gt;3500mg</td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-zinc-700 dark:text-zinc-300">K/Na Ratio</td>
+                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
+                    {averages.week?.avgKNaRatio !== null && averages.week?.avgKNaRatio !== undefined 
+                      ? averages.week.avgKNaRatio.toFixed(2) + ':1' 
+                      : '—'}
+                  </td>
+                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
+                    {averages.month?.avgKNaRatio !== null && averages.month?.avgKNaRatio !== undefined 
+                      ? averages.month.avgKNaRatio.toFixed(2) + ':1' 
+                      : '—'}
+                  </td>
+                  <td className="py-2 text-right text-zinc-500">&gt;1.5:1</td>
                 </tr>
                 <tr>
                   <td className="py-2 text-zinc-700 dark:text-zinc-300">Fiber</td>
