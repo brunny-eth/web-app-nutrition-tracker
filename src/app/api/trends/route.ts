@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
   });
 
   // Convert to array and sort
-  const chartData = Object.entries(dailyData)
+  const allChartData = Object.entries(dailyData)
     .map(([date, data]) => ({
       date,
       ...data,
@@ -158,15 +158,19 @@ export async function GET(request: NextRequest) {
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Calculate averages for last 7 and 30 days
+  // Exclude today so charts and averages only use complete days (today is still in progress)
+  const todayStr = endDateStr;
+  const chartData = allChartData.filter((d) => d.date !== todayStr);
+
+  // Calculate averages for last 7 and 30 days (already excludes today via chartData)
   const now = new Date();
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const last7Days = chartData.filter(d => new Date(d.date) >= sevenDaysAgo);
-  const last30Days = chartData.filter(d => new Date(d.date) >= thirtyDaysAgo);
+  const last7Days = chartData.filter((d) => new Date(d.date) >= sevenDaysAgo);
+  const last30Days = chartData.filter((d) => new Date(d.date) >= thirtyDaysAgo);
 
   const calculateAverages = (data: typeof chartData) => {
     if (data.length === 0) return null;
