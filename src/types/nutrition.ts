@@ -49,6 +49,16 @@ export const ParsedMealSchema = z.object({
 
 export type ParsedMeal = z.infer<typeof ParsedMealSchema>;
 
+// Schema for LLM activity estimation response
+export const ActivityEstimateSchema = z.object({
+  multiplier: z.number().describe('Estimated Harris-Benedict activity multiplier (1.1–2.2 scale)'),
+  multiplier_low: z.number().describe('Low end of 90% confidence interval'),
+  multiplier_high: z.number().describe('High end of 90% confidence interval'),
+  summary: z.string().describe('Brief 1-sentence summary of the estimated activity level'),
+});
+
+export type ActivityEstimate = z.infer<typeof ActivityEstimateSchema>;
+
 // TDEE calculation types
 export interface TDEECalculation {
   bmr: number;

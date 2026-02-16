@@ -6,7 +6,7 @@ import { LoginForm } from '@/components/LoginForm';
 import { FoodEntryForm } from '@/components/FoodEntryForm';
 import { DailySummary } from '@/components/DailySummary';
 import { EntryList } from '@/components/EntryList';
-import { ActivitySelector } from '@/components/ActivitySelector';
+import { ActivitySelector, type ActivityData } from '@/components/ActivitySelector';
 
 interface AuthStatus {
   authenticated: boolean;
@@ -70,7 +70,7 @@ export default function Home() {
   const [today, setToday] = useState('');
   const [yesterday, setYesterday] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [activityLevel, setActivityLevel] = useState<number>(3); // Default to Moderate
+  const [activityData, setActivityData] = useState<ActivityData | null>(null);
   const [loadingEntries, setLoadingEntries] = useState(false);
 
   // Check auth status on mount
@@ -132,7 +132,24 @@ export default function Home() {
     try {
       const res = await fetch(`/api/activity?date=${selectedDate}`);
       const data = await res.json();
-      setActivityLevel(data.activity?.activity_level_id || 3); // Default to Moderate
+      const activity = data.activity;
+      if (activity?.multiplier) {
+        // New-style: LLM-estimated multiplier
+        setActivityData({
+          multiplier: activity.multiplier,
+          multiplier_low: activity.multiplier_low ?? activity.multiplier,
+          multiplier_high: activity.multiplier_high ?? activity.multiplier,
+          summary: activity.summary ?? undefined,
+          description: activity.description ?? undefined,
+        });
+      } else if (activity?.activity_level_id) {
+        // Old-style: map activity_level_id to multiplier for backward compat
+        const multipliers = [1.2, 1.375, 1.55, 1.725, 1.9];
+        const m = multipliers[activity.activity_level_id - 1] ?? 1.55;
+        setActivityData({ multiplier: m, multiplier_low: m, multiplier_high: m });
+      } else {
+        setActivityData(null);
+      }
     } catch (error) {
       console.error('Failed to fetch activity:', error);
     }
@@ -209,9 +226,8 @@ export default function Home() {
       } else {
         bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age_years - 161;
       }
-      // Use activity multiplier (default to sedentary if not set)
-      const multipliers = [1.2, 1.375, 1.55, 1.725, 1.9];
-      const multiplier = activityLevel ? multipliers[activityLevel - 1] : 1.2;
+      // Use activity multiplier directly (default to moderate 1.55)
+      const multiplier = activityData?.multiplier ?? 1.55;
       const tdee = bmr * multiplier;
       targetCalories = Math.round(tdee - calorie_deficit);
       targetProtein = Math.round(weight_kg * 1.6);
@@ -295,9 +311,9 @@ export default function Home() {
 
           {/* Activity Selector */}
           <ActivitySelector
-            currentLevel={activityLevel}
+            currentActivity={activityData}
             date={selectedDate}
-            onSelect={setActivityLevel}
+            onSelect={setActivityData}
           />
 
           {/* Daily Summary */}

@@ -14,7 +14,12 @@ interface DailyActivity {
   id: string;
   user_id: string;
   resolved_date: string;
-  activity_level_id: number;
+  activity_level_id: number | null;
+  description: string | null;
+  multiplier: number | null;
+  multiplier_low: number | null;
+  multiplier_high: number | null;
+  summary: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -53,7 +58,7 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/activity - Set activity level for a date
+ * POST /api/activity - Set activity for a date (new LLM-estimated format)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -64,10 +69,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const date = body.date as string;
-    const activity_level_id = body.activity_level_id as number;
 
-    if (!date || !activity_level_id) {
-      return NextResponse.json({ error: 'Date and activity_level_id required' }, { status: 400 });
+    if (!date) {
+      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
+    }
+
+    // Accept new-style (multiplier-based) or old-style (activity_level_id) payloads
+    const multiplier = body.multiplier as number | undefined;
+    const activity_level_id = body.activity_level_id as number | undefined;
+
+    if (!multiplier && !activity_level_id) {
+      return NextResponse.json({ error: 'Either multiplier or activity_level_id is required' }, { status: 400 });
     }
 
     const supabase = getSupabase();
@@ -79,9 +91,27 @@ export async function POST(request: NextRequest) {
       .eq('user_id', userId)
       .eq('resolved_date', date);
 
+    const insertData: Record<string, unknown> = {
+      user_id: userId,
+      resolved_date: date,
+    };
+
+    if (multiplier) {
+      // New-style: LLM-estimated multiplier
+      insertData.multiplier = multiplier;
+      insertData.multiplier_low = body.multiplier_low ?? null;
+      insertData.multiplier_high = body.multiplier_high ?? null;
+      insertData.description = body.description ?? null;
+      insertData.summary = body.summary ?? null;
+      // activity_level_id left as null
+    } else {
+      // Old-style: activity level ID
+      insertData.activity_level_id = activity_level_id;
+    }
+
     const { data, error } = await supabase
       .from('daily_activity')
-      .insert({ user_id: userId, resolved_date: date, activity_level_id })
+      .insert(insertData)
       .select('*')
       .single();
 

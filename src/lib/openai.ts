@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
-import { ParsedMealSchema, type ParsedMeal } from '@/types/nutrition';
+import { ParsedMealSchema, type ParsedMeal, ActivityEstimateSchema, type ActivityEstimate } from '@/types/nutrition';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -206,4 +206,52 @@ export function validateParsedMeal(meal: ParsedMeal): { valid: boolean; errors: 
     valid: errors.length === 0,
     errors,
   };
+}
+
+const ACTIVITY_SYSTEM_PROMPT = `You are an activity level estimation assistant. Your job is to estimate a Harris-Benedict activity multiplier from a natural language description of someone's daily activity.
+
+THE HARRIS-BENEDICT ACTIVITY MULTIPLIER SCALE:
+- 1.2: Sedentary (desk job, no exercise, minimal movement)
+- 1.375: Lightly active (light exercise 1-3 days/week, walking, light housework)
+- 1.55: Moderately active (moderate exercise 3-5 days/week)
+- 1.725: Very active (hard exercise 6-7 days/week, physical job)
+- 1.9: Extra active (very hard exercise, physical job + training)
+- Up to 2.2: Professional athlete level
+
+RULES:
+1. Return a multiplier on the 1.1–2.2 scale based on the described activities.
+2. You can return any value in that range — you are NOT limited to the 5 standard levels. For example, someone who did a 30-min jog but otherwise sat at a desk might be 1.45.
+3. Provide a 90% confidence interval (multiplier_low, multiplier_high). Narrow intervals for specific descriptions, wider for vague ones.
+4. The summary should be 1 sentence describing the estimated activity level.
+5. Consider both exercise AND baseline daily activity (desk job vs. retail worker vs. construction).
+6. A single workout doesn't make someone "very active" — the whole day matters.
+
+EXAMPLES:
+- "Rest day, worked from home" → multiplier: 1.2, range: 1.15–1.25
+- "30 min jog, otherwise desk work" → multiplier: 1.45, range: 1.38–1.52
+- "1 hour weight training, walked to work (20 min each way)" → multiplier: 1.6, range: 1.52–1.68
+- "On my feet all day at work, plus 45 min gym session" → multiplier: 1.75, range: 1.65–1.85
+- "2 hour soccer game, active job" → multiplier: 1.9, range: 1.8–2.0`;
+
+/**
+ * Estimate an activity multiplier from a natural language description using GPT-4o
+ */
+export async function estimateActivityMultiplier(description: string): Promise<ActivityEstimate> {
+  const response = await openai.chat.completions.parse({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: ACTIVITY_SYSTEM_PROMPT },
+      { role: 'user', content: `Estimate the activity multiplier for this day:\n\n"${description}"` },
+    ],
+    response_format: zodResponseFormat(ActivityEstimateSchema, 'activity_estimate'),
+    temperature: 0.3,
+  });
+
+  const parsed = response.choices[0].message.parsed;
+
+  if (!parsed) {
+    throw new Error('Failed to estimate activity multiplier');
+  }
+
+  return parsed;
 }
