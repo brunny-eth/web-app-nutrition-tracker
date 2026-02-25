@@ -65,6 +65,13 @@ interface EntryCardProps {
 function EntryCard({ entry, onDelete, onUpdate }: EntryCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(entry.raw_text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   const totalCalories = entry.entry_items.reduce((sum, item) => sum + item.calories, 0);
   const totalProtein = entry.entry_items.reduce((sum, item) => sum + item.protein_g, 0);
@@ -109,7 +116,7 @@ function EntryCard({ entry, onDelete, onUpdate }: EntryCardProps) {
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-center gap-1">
           <button
             onClick={() => setExpanded(!expanded)}
             className="rounded-lg p-2 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
@@ -138,6 +145,25 @@ function EntryCard({ entry, onDelete, onUpdate }: EntryCardProps) {
                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
               />
             </svg>
+          </button>
+          <button
+            onClick={handleCopy}
+            className={`rounded-lg p-2 transition-colors ${
+              copied
+                ? 'text-green-500 dark:text-green-400'
+                : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300'
+            }`}
+            title={copied ? 'Copied!' : 'Copy meal text'}
+          >
+            {copied ? (
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            )}
           </button>
         </div>
       </div>

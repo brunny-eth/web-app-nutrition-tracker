@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
@@ -15,9 +15,9 @@ interface FoodEntryFormProps {
   yesterday: string;
 }
 
-export function FoodEntryForm({ 
-  selectedDate, 
-  onDateChange, 
+export function FoodEntryForm({
+  selectedDate,
+  onDateChange,
   onEntryCreated,
   today,
   yesterday,
@@ -28,9 +28,62 @@ export function FoodEntryForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
-  
+  const [showRecent, setShowRecent] = useState(false);
+  const [recentMeals, setRecentMeals] = useState<string[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recentDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close recent dropdown on outside click
+  useEffect(() => {
+    if (!showRecent) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (recentDropdownRef.current && !recentDropdownRef.current.contains(e.target as Node)) {
+        setShowRecent(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showRecent]);
+
+  const fetchRecentMeals = async () => {
+    setLoadingRecent(true);
+    try {
+      const fromDate = new Date(today + 'T00:00:00');
+      fromDate.setDate(fromDate.getDate() - 13); // 14 days back
+      const fromStr = fromDate.toISOString().split('T')[0];
+      const res = await fetch(`/api/entries?from=${fromStr}&to=${today}`);
+      const data = await res.json();
+      const seen = new Set<string>();
+      const unique: string[] = [];
+      const imageOnlyPattern = /^\d*\.?\d*\s*servings?$/i;
+      for (const entry of (data.entries || [])) {
+        const text = entry.raw_text.trim();
+        if (!seen.has(text) && !imageOnlyPattern.test(text)) {
+          seen.add(text);
+          unique.push(text);
+        }
+        if (unique.length >= 8) break;
+      }
+      setRecentMeals(unique);
+    } finally {
+      setLoadingRecent(false);
+    }
+  };
+
+  const handleOpenRecent = () => {
+    const next = !showRecent;
+    setShowRecent(next);
+    if (next) fetchRecentMeals();
+  };
+
+  const handleSelectRecent = (mealText: string) => {
+    setText(mealText);
+    setShowRecent(false);
+    textareaRef.current?.focus();
+  };
 
   const handleImageFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -214,7 +267,7 @@ export function FoodEntryForm({
 
       {/* Action buttons row */}
       <div className="flex gap-2">
-        {/* Photo button (mobile-friendly) */}
+        {/* Photo button */}
         <input
           ref={fileInputRef}
           type="file"
@@ -235,6 +288,52 @@ export function FoodEntryForm({
           </svg>
           <span className="hidden sm:inline">Photo</span>
         </button>
+
+        {/* Recent meals dropdown */}
+        <div ref={recentDropdownRef} className="relative">
+          <button
+            type="button"
+            onClick={handleOpenRecent}
+            disabled={loading}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+              showRecent
+                ? 'border-blue-300 bg-blue-50 text-blue-600 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-400'
+                : 'border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+            }`}
+            title="Pick a recent meal"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="hidden sm:inline">Recent</span>
+          </button>
+
+          {showRecent && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-80 rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+              {loadingRecent ? (
+                <div className="flex items-center justify-center p-4">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                </div>
+              ) : recentMeals.length === 0 ? (
+                <p className="p-4 text-sm text-zinc-500 dark:text-zinc-400">No recent meals found</p>
+              ) : (
+                <ul className="max-h-64 overflow-y-auto py-1">
+                  {recentMeals.map((meal, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectRecent(meal)}
+                        className="w-full px-4 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      >
+                        <span className="line-clamp-2">{meal}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Submit button */}
         <button
@@ -299,13 +398,6 @@ export function FoodEntryForm({
           </label>
         </div>
       </div>
-
-      {/* Helper text for photos */}
-      {!image && (
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">
-          Tip: Use photos for nutrition labels or menus only (not photos of food)
-        </p>
-      )}
 
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
