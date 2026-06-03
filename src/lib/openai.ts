@@ -1,9 +1,9 @@
-import OpenAI from 'openai';
-import { zodResponseFormat } from 'openai/helpers/zod';
+import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import { ParsedMealSchema, type ParsedMeal, ActivityEstimateSchema, type ActivityEstimate } from '@/types/nutrition';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const client = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 const SYSTEM_PROMPT = `You are a nutrition analysis assistant. Your job is to parse meal descriptions (text and/or images) and return structured nutritional data.
@@ -12,7 +12,7 @@ RULES:
 1. NEVER ask clarifying questions. Make reasonable assumptions and list them.
 2. Use your best midpoint estimate. Be confident - the user will provide specific details if possible.
 3. Include reasonable amounts of oils, sauces, and cooking fats as appropriate to the meal unless explicitly excluded or mentioned in the description.
-4. Provide tight confidence intervals: for example, low = estimate × 0.9, high = estimate × 1.1 (±10% bounds). Be more precise if the user provides enough details to be more confident. 
+4. Provide tight confidence intervals: for example, low = estimate × 0.9, high = estimate × 1.1 (±10% bounds). Be more precise if the user provides enough details to be more confident.
 5. Only widen beyond ±10% if the description is genuinely vague (e.g., "some rice" vs "1 cup rice").
 6. DATE EXTRACTION - Only extract explicit_date when the user is clearly stating WHEN they ate the food:
    - Extract date: "I had pizza yesterday", "ate lunch on Monday", "breakfast Jan 15"
@@ -25,7 +25,7 @@ ESTIMATION GUIDELINES:
 - A "serving" or "portion" without size = medium/typical restaurant portion
 - "Some" = moderate amount (e.g., 1-2 tbsp for sauces)
 - Homemade meals: assume reasonable home cooking amounts
-- Restaurant meals: assume typical American restaurant portions 
+- Restaurant meals: assume typical American restaurant portions
 - When user provides specific amounts (oz, cups, grams, pieces), use those precisely with tight ±10% bounds
 - Only use wider bounds (±15-20%) when description is vague like "a bowl of" or "some"
 
@@ -95,60 +95,69 @@ Output: 3 items
   3. "banana" (1 medium): 105 cal, 1.3g protein, 27g carbs, 0.4g fat, 0.1g sat_fat, 3.1g fiber, 1mg sodium, 0g added_sugar, 420mg potassium
      Assumptions: Banana sugars are natural - added_sugar = 0.`;
 
-/**
- * Parse a meal description using GPT-4o with structured output
- * Supports text, images, or both combined
- */
 export async function parseMealDescription(
   mealText: string,
   todayDate: string, // YYYY-MM-DD format, in user's timezone
   imageBase64?: string // Optional base64 image data
 ): Promise<ParsedMeal> {
-  // Build user message content
-  const userContent: OpenAI.Chat.ChatCompletionContentPart[] = [];
-  
+  const userContent: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = [];
+
   // Add image if provided
   if (imageBase64) {
-    userContent.push({
-      type: 'image_url',
-      image_url: {
-        url: imageBase64,
-        detail: 'high',
-      },
-    });
+    // imageBase64 arrives as a data URL: "data:image/jpeg;base64,..."
+    const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      userContent.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: match[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          data: match[2],
+        },
+      });
+    }
   }
-  
+
   // Build text prompt
   let textPrompt = `Today's date is ${todayDate}.\n\n`;
-  
+
   if (imageBase64 && mealText && mealText !== '1 serving') {
-    // Both image and meaningful text
     textPrompt += `Parse this meal. The image shows a nutrition label/menu. The user's description is: "${mealText}"\n\nExtract nutrition from the image AND parse any other foods mentioned in the text.`;
   } else if (imageBase64) {
-    // Image only (or image with default "1 serving" text)
     textPrompt += `Extract nutritional data from this image. Assume 1 serving unless otherwise indicated.`;
   } else {
-    // Text only
     textPrompt += `Parse the following meal description and return structured nutritional data:\n\n"${mealText}"`;
   }
-  
+
   userContent.push({ type: 'text', text: textPrompt });
 
-  const response = await openai.chat.completions.parse({
-    model: 'gpt-4o',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userContent },
-    ],
-    response_format: zodResponseFormat(ParsedMealSchema, 'parsed_meal'),
-    temperature: 0.3,
+  const response = await client.messages.create({
+    model: 'claude-opus-4-8',
+    max_tokens: 8192,
+    system: [{
+      type: 'text',
+      text: SYSTEM_PROMPT,
+      cache_control: { type: 'ephemeral' },
+    }],
+    messages: [{ role: 'user', content: userContent }],
+    tools: [{
+      name: 'parse_meal',
+      description: 'Parse meal description and return structured nutritional data',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      input_schema: z.toJSONSchema(ParsedMealSchema) as any,
+    }],
+    tool_choice: { type: 'tool', name: 'parse_meal' },
   });
 
-  const parsed = response.choices[0].message.parsed;
-  
-  if (!parsed) {
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+  );
+
+  if (!toolUse) {
     throw new Error('Failed to parse meal description');
   }
+
+  const parsed = ParsedMealSchema.parse(toolUse.input);
 
   // Check for image validation error in assumptions
   for (const item of parsed.items) {
@@ -191,10 +200,10 @@ export function validateParsedMeal(meal: ParsedMeal): { valid: boolean; errors: 
 
     // Check for negative values
     const numericFields = [
-      'calories', 'protein_g', 'carbs_g', 'fat_g', 
+      'calories', 'protein_g', 'carbs_g', 'fat_g',
       'saturated_fat_g', 'unsaturated_fat_g', 'fiber_g', 'sodium_mg', 'added_sugar_g', 'potassium_mg'
     ] as const;
-    
+
     for (const field of numericFields) {
       if (item[field] < 0) {
         errors.push(`${item.food_name}: ${field} is negative`);
@@ -233,25 +242,30 @@ EXAMPLES:
 - "On my feet all day at work, plus 45 min gym session" → multiplier: 1.75, range: 1.65–1.85
 - "2 hour soccer game, active job" → multiplier: 1.9, range: 1.8–2.0`;
 
-/**
- * Estimate an activity multiplier from a natural language description using GPT-4o
- */
 export async function estimateActivityMultiplier(description: string): Promise<ActivityEstimate> {
-  const response = await openai.chat.completions.parse({
-    model: 'gpt-4o',
+  const response = await client.messages.create({
+    model: 'claude-opus-4-8',
+    max_tokens: 1024,
+    system: ACTIVITY_SYSTEM_PROMPT,
     messages: [
-      { role: 'system', content: ACTIVITY_SYSTEM_PROMPT },
       { role: 'user', content: `Estimate the activity multiplier for this day:\n\n"${description}"` },
     ],
-    response_format: zodResponseFormat(ActivityEstimateSchema, 'activity_estimate'),
-    temperature: 0.3,
+    tools: [{
+      name: 'estimate_activity',
+      description: 'Estimate Harris-Benedict activity multiplier from activity description',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      input_schema: z.toJSONSchema(ActivityEstimateSchema) as any,
+    }],
+    tool_choice: { type: 'tool', name: 'estimate_activity' },
   });
 
-  const parsed = response.choices[0].message.parsed;
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+  );
 
-  if (!parsed) {
+  if (!toolUse) {
     throw new Error('Failed to estimate activity multiplier');
   }
 
-  return parsed;
+  return ActivityEstimateSchema.parse(toolUse.input);
 }

@@ -24,12 +24,12 @@ function withinTolerance(actual: number, expected: number): boolean {
 }
 
 // Check if API key is available
-const hasApiKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your_openai_api_key_here';
+const hasApiKey = process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key_here';
 
 // Conditionally run or skip the describe block
 const describeIfApiKey = hasApiKey ? describe : describe.skip;
 
-describeIfApiKey('Known Meals Regression (requires OPENAI_API_KEY)', () => {
+describeIfApiKey('Known Meals Regression (requires ANTHROPIC_API_KEY)', () => {
   const today = '2026-01-29';
   let parseMealDescription: typeof import('./openai').parseMealDescription;
 
@@ -197,7 +197,7 @@ describeIfApiKey('Known Meals Regression (requires OPENAI_API_KEY)', () => {
 // If no API key, show a message
 if (!hasApiKey) {
   describe('Known Meals Regression', () => {
-    it('SKIPPED - Set OPENAI_API_KEY in .env.local to run these tests', () => {
+    it('SKIPPED - Set ANTHROPIC_API_KEY in .env.local to run these tests', () => {
       console.log('⚠️  Known meals tests skipped - no API key');
       expect(true).toBe(true);
     });
