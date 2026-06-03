@@ -132,7 +132,7 @@ export async function parseMealDescription(
   userContent.push({ type: 'text', text: textPrompt });
 
   const response = await client.messages.create({
-    model: 'claude-opus-4-8',
+    model: 'claude-sonnet-4-6',
     max_tokens: 8192,
     system: [{
       type: 'text',
@@ -244,7 +244,7 @@ EXAMPLES:
 
 export async function estimateActivityMultiplier(description: string): Promise<ActivityEstimate> {
   const response = await client.messages.create({
-    model: 'claude-opus-4-8',
+    model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     system: ACTIVITY_SYSTEM_PROMPT,
     messages: [
