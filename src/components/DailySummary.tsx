@@ -16,20 +16,22 @@ interface DailySummaryProps {
   potassium: NutrientValue;
   targetCalories?: number;
   targetProtein?: number;
+  satFatPercent?: number;
   sex?: 'male' | 'female' | null;
 }
 
 // Recommended daily values based on nutrition guidelines
-function getRecommendations(targetCalories?: number, sex?: 'male' | 'female' | null) {
+function getRecommendations(targetCalories?: number, sex?: 'male' | 'female' | null, satFatPercent?: number) {
   const cals = targetCalories || 2000;
   const isMale = sex === 'male';
-  
+  const satPct = satFatPercent ?? 10;
+
   return {
-    // Saturated fat: <10% of daily calories (9 cal/g of fat)
+    // Saturated fat: configurable % of daily calories (9 cal/g of fat)
     saturatedFat: {
-      limit: Math.round((cals * 0.10) / 9),
+      limit: Math.round((cals * (satPct / 100)) / 9),
       type: 'limit' as const,
-      tip: '<10% of calories',
+      tip: `<${satPct}% of calories`,
     },
     // Sodium: <2750mg upper bound
     sodium: {
@@ -69,9 +71,10 @@ export function DailySummary({
   potassium,
   targetCalories,
   targetProtein,
+  satFatPercent,
   sex,
 }: DailySummaryProps) {
-  const recs = getRecommendations(targetCalories, sex);
+  const recs = getRecommendations(targetCalories, sex, satFatPercent);
   
   // Calculate K/Na ratio (ideal >1.5, ok >1, bad <1)
   const kNaRatio = sodium.value > 0 ? potassium.value / sodium.value : 0;

@@ -23,7 +23,7 @@ export async function GET() {
 
     const { data: settings, error } = await supabase
       .from('user_settings')
-      .select('id, email, name, weight_kg, height_cm, age_years, sex, calorie_deficit, timezone, created_at')
+      .select('id, email, name, weight_kg, height_cm, age_years, sex, calorie_deficit, saturated_fat_percent, protein_g_per_kg, protein_floor_g, supplements, timezone, created_at')
       .eq('id', userId)
       .single();
 
@@ -56,6 +56,10 @@ export async function PATCH(request: NextRequest) {
       age_years,
       sex,
       calorie_deficit,
+      saturated_fat_percent,
+      protein_g_per_kg,
+      protein_floor_g,
+      supplements,
       timezone,
       current_password,
       new_password,
@@ -85,6 +89,10 @@ export async function PATCH(request: NextRequest) {
     if (age_years !== undefined) updates.age_years = age_years || null;
     if (sex !== undefined) updates.sex = sex || null;
     if (calorie_deficit !== undefined) updates.calorie_deficit = calorie_deficit;
+    if (saturated_fat_percent !== undefined) updates.saturated_fat_percent = saturated_fat_percent;
+    if (protein_g_per_kg !== undefined) updates.protein_g_per_kg = protein_g_per_kg;
+    if (protein_floor_g !== undefined) updates.protein_floor_g = protein_floor_g;
+    if (supplements !== undefined) updates.supplements = supplements;
     if (timezone !== undefined) updates.timezone = timezone;
 
     // Handle password change
@@ -110,7 +118,7 @@ export async function PATCH(request: NextRequest) {
       .from('user_settings')
       .update(updates)
       .eq('id', userId)
-      .select('id, email, name, weight_kg, height_cm, age_years, sex, calorie_deficit, timezone')
+      .select('id, email, name, weight_kg, height_cm, age_years, sex, calorie_deficit, saturated_fat_percent, protein_g_per_kg, protein_floor_g, supplements, timezone')
       .single();
 
     if (updateError) {

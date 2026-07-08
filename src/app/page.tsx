@@ -7,6 +7,9 @@ import { FoodEntryForm } from '@/components/FoodEntryForm';
 import { DailySummary } from '@/components/DailySummary';
 import { EntryList } from '@/components/EntryList';
 import { ActivitySelector, type ActivityData } from '@/components/ActivitySelector';
+import { DailyChecklist, type ChecklistData } from '@/components/DailyChecklist';
+import { proteinTargetGrams } from '@/lib/tdee';
+import type { Supplement } from '@/types/database';
 
 interface AuthStatus {
   authenticated: boolean;
@@ -18,6 +21,10 @@ interface AuthStatus {
     age_years: number | null;
     sex: 'male' | 'female' | null;
     calorie_deficit: number;
+    saturated_fat_percent: number;
+    protein_g_per_kg: number;
+    protein_floor_g: number;
+    supplements: Supplement[];
     timezone: string;
   } | null;
 }
@@ -71,6 +78,7 @@ export default function Home() {
   const [yesterday, setYesterday] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [activityData, setActivityData] = useState<ActivityData | null>(null);
+  const [checklist, setChecklist] = useState<ChecklistData>({ supplements_taken: [], alcohol: false });
   const [loadingEntries, setLoadingEntries] = useState(false);
 
   // Check auth status on mount
@@ -99,6 +107,7 @@ export default function Home() {
     if (selectedDate && authStatus?.authenticated) {
       fetchEntries();
       fetchActivity();
+      fetchChecklist();
     }
   }, [selectedDate, authStatus?.authenticated]);
 
@@ -152,6 +161,21 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Failed to fetch activity:', error);
+    }
+  };
+
+  const fetchChecklist = async () => {
+    try {
+      const res = await fetch(`/api/checklist?date=${selectedDate}`);
+      const data = await res.json();
+      const c = data.checklist;
+      setChecklist({
+        supplements_taken: c?.supplements_taken ?? [],
+        alcohol: c?.alcohol ?? false,
+      });
+    } catch (error) {
+      console.error('Failed to fetch checklist:', error);
+      setChecklist({ supplements_taken: [], alcohol: false });
     }
   };
 
@@ -230,7 +254,11 @@ export default function Home() {
       const multiplier = activityData?.multiplier ?? 1.55;
       const tdee = bmr * multiplier;
       targetCalories = Math.round(tdee - calorie_deficit);
-      targetProtein = Math.round(weight_kg * 1.6);
+      targetProtein = proteinTargetGrams(
+        weight_kg,
+        authStatus.settings.protein_g_per_kg,
+        authStatus.settings.protein_floor_g
+      );
     }
   }
 
@@ -316,6 +344,14 @@ export default function Home() {
             onSelect={setActivityData}
           />
 
+          {/* Supplement & Alcohol Checklist */}
+          <DailyChecklist
+            supplements={authStatus.settings?.supplements ?? []}
+            date={selectedDate}
+            checklist={checklist}
+            onChange={setChecklist}
+          />
+
           {/* Daily Summary */}
           <section>
             <DailySummary
@@ -328,6 +364,7 @@ export default function Home() {
               potassium={totals.potassium}
               targetCalories={targetCalories}
               targetProtein={targetProtein}
+              satFatPercent={authStatus.settings?.saturated_fat_percent}
               sex={authStatus.settings?.sex}
             />
           </section>

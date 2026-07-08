@@ -50,11 +50,29 @@ interface Averages {
   daysTracked: number;
 }
 
+interface SupplementAdherence {
+  id: string;
+  name: string;
+  taken: number;
+  pct: number;
+}
+
+interface Adherence {
+  days: number;
+  supplements: SupplementAdherence[];
+  alcoholFreeDays: number;
+  alcoholFreePct: number;
+}
+
 interface TrendsData {
   chartData: ChartDataPoint[];
   averages: {
     week: Averages | null;
     month: Averages | null;
+  };
+  adherence: {
+    week: Adherence | null;
+    month: Adherence | null;
   };
   recommendations: {
     saturatedFatLimit: number;
@@ -118,7 +136,9 @@ export default function TrendsPage() {
     );
   }
 
-  const { chartData, averages, recommendations, settings } = data;
+  const { chartData, averages, adherence, recommendations, settings } = data;
+  const monthAdh = adherence.month;
+  const weekAdh = adherence.week;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -546,8 +566,88 @@ export default function TrendsPage() {
             </table>
           </div>
         </section>
+
+        {/* Supplement & Alcohol Adherence */}
+        <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-1 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+            Supplements &amp; Alcohol
+          </h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            % of tracked days (excludes today; only counts days you used the checklist)
+          </p>
+          {!monthAdh || monthAdh.days === 0 ? (
+            <p className="py-6 text-center text-sm text-zinc-500">No checklist data yet</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-700">
+                    <th className="py-2 text-left font-medium text-zinc-500">Item</th>
+                    <th className="py-2 text-right font-medium text-zinc-500">7-Day</th>
+                    <th className="py-2 text-right font-medium text-zinc-500">30-Day</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {monthAdh.supplements.map((s) => {
+                    const week = weekAdh?.supplements.find((w) => w.id === s.id);
+                    return (
+                      <tr key={s.id}>
+                        <td className="py-2 text-zinc-700 dark:text-zinc-300">{s.name}</td>
+                        <td className="py-2 text-right">
+                          <AdherenceCell pct={week?.pct ?? null} taken={week?.taken} days={weekAdh?.days} />
+                        </td>
+                        <td className="py-2 text-right">
+                          <AdherenceCell pct={s.pct} taken={s.taken} days={monthAdh.days} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr>
+                    <td className="py-2 text-zinc-700 dark:text-zinc-300">Alcohol-free days</td>
+                    <td className="py-2 text-right">
+                      <AdherenceCell
+                        pct={weekAdh?.alcoholFreePct ?? null}
+                        taken={weekAdh?.alcoholFreeDays}
+                        days={weekAdh?.days}
+                      />
+                    </td>
+                    <td className="py-2 text-right">
+                      <AdherenceCell
+                        pct={monthAdh.alcoholFreePct}
+                        taken={monthAdh.alcoholFreeDays}
+                        days={monthAdh.days}
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </main>
     </div>
+  );
+}
+
+function AdherenceCell({ pct, taken, days }: { pct: number | null; taken?: number; days?: number }) {
+  if (pct === null || pct === undefined) {
+    return <span className="text-zinc-400">—</span>;
+  }
+  const color =
+    pct >= 85
+      ? 'text-green-600 dark:text-green-400'
+      : pct >= 60
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-red-600 dark:text-red-400';
+  return (
+    <span className={`font-medium ${color}`}>
+      {pct}%
+      {taken !== undefined && days !== undefined && (
+        <span className="ml-1 text-[10px] font-normal text-zinc-400">
+          {taken}/{days}
+        </span>
+      )}
+    </span>
   );
 }
 

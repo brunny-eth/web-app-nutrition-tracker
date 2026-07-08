@@ -65,6 +65,14 @@ export async function GET(request: NextRequest) {
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr);
 
+  // Get supplement/alcohol checklist for each day
+  const { data: checklists } = await supabase
+    .from('daily_checklist')
+    .select('resolved_date, supplements_taken, alcohol')
+    .eq('user_id', userId)
+    .gte('resolved_date', startDateStr)
+    .lte('resolved_date', endDateStr);
+
   // Build activity lookup
   const activityMap: Record<string, number> = {};
   activities?.forEach((a) => {
@@ -110,8 +118,11 @@ export async function GET(request: NextRequest) {
       const targetCalories = tdee && settings?.calorie_deficit 
         ? tdee - settings.calorie_deficit 
         : null;
-      const targetProtein = settings?.weight_kg 
-        ? Math.round(settings.weight_kg * 1.6) 
+      const targetProtein = settings?.weight_kg
+        ? Math.max(
+            Math.round(settings.weight_kg * (settings.protein_g_per_kg ?? 1.8)),
+            settings.protein_floor_g ?? 150
+          )
         : null;
 
       dailyData[date] = {
@@ -206,11 +217,45 @@ export async function GET(request: NextRequest) {
     ? Math.round(bmr * 1.55 - settings.calorie_deficit) // Use moderate activity for baseline
     : 2000;
 
+  const satFatPercent = settings?.saturated_fat_percent ?? 7;
   const recommendations = {
-    saturatedFatLimit: Math.round((targetCalories * 0.10) / 9),
+    saturatedFatLimit: Math.round((targetCalories * (satFatPercent / 100)) / 9),
     addedSugarLimit: isMale ? 36 : 25,
     sodiumLimit: 2300,
     fiberTarget: isMale ? 38 : 25,
+  };
+
+  // --- Supplement & alcohol adherence ---
+  // Denominator is days that have a checklist row (so pre-feature days don't count against you).
+  const supplementsList: { id: string; name: string }[] = Array.isArray(settings?.supplements)
+    ? settings.supplements
+    : [];
+
+  const todayStrForChecklist = endDateStr;
+  const checklistRows = (checklists ?? []).filter((c) => c.resolved_date !== todayStrForChecklist);
+
+  const computeAdherence = (windowStart: Date) => {
+    const rows = checklistRows.filter((c) => new Date(c.resolved_date) >= windowStart);
+    if (rows.length === 0) return null;
+
+    const supplements = supplementsList.map((s) => {
+      const taken = rows.filter((r) => (r.supplements_taken ?? []).includes(s.id)).length;
+      return {
+        id: s.id,
+        name: s.name,
+        taken,
+        pct: Math.round((taken / rows.length) * 100),
+      };
+    });
+
+    const alcoholFreeDays = rows.filter((r) => !r.alcohol).length;
+
+    return {
+      days: rows.length,
+      supplements,
+      alcoholFreeDays,
+      alcoholFreePct: Math.round((alcoholFreeDays / rows.length) * 100),
+    };
   };
 
   return NextResponse.json({
@@ -219,9 +264,18 @@ export async function GET(request: NextRequest) {
       week: calculateAverages(last7Days),
       month: calculateAverages(last30Days),
     },
+    adherence: {
+      week: computeAdherence(sevenDaysAgo),
+      month: computeAdherence(thirtyDaysAgo),
+    },
     recommendations,
     settings: settings ? {
-      targetProtein: settings.weight_kg ? Math.round(settings.weight_kg * 1.6) : null,
+      targetProtein: settings.weight_kg
+        ? Math.max(
+            Math.round(settings.weight_kg * (settings.protein_g_per_kg ?? 1.8)),
+            settings.protein_floor_g ?? 150
+          )
+        : null,
       calorieDeficit: settings.calorie_deficit,
     } : null,
   });

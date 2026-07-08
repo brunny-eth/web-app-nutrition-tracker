@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Supplement } from '@/types/database';
 
 interface Settings {
   id: string;
@@ -11,6 +12,10 @@ interface Settings {
   age_years: number | null;
   sex: 'male' | 'female' | null;
   calorie_deficit: number;
+  saturated_fat_percent: number | null;
+  protein_g_per_kg: number | null;
+  protein_floor_g: number | null;
+  supplements: Supplement[] | null;
   timezone: string;
 }
 
@@ -28,6 +33,10 @@ export default function SettingsPage() {
   const [ageYears, setAgeYears] = useState('');
   const [sex, setSex] = useState<'male' | 'female' | ''>('');
   const [calorieDeficit, setCalorieDeficit] = useState('');
+  const [satFatPercent, setSatFatPercent] = useState('');
+  const [proteinGPerKg, setProteinGPerKg] = useState('');
+  const [proteinFloor, setProteinFloor] = useState('');
+  const [supplements, setSupplements] = useState<Supplement[]>([]);
   const [timezone, setTimezone] = useState('America/New_York');
 
   // Password change
@@ -57,12 +66,48 @@ export default function SettingsPage() {
       setAgeYears(s.age_years?.toString() || '');
       setSex(s.sex || '');
       setCalorieDeficit(s.calorie_deficit?.toString() || '500');
+      setSatFatPercent(s.saturated_fat_percent?.toString() || '7');
+      setProteinGPerKg(s.protein_g_per_kg?.toString() || '1.8');
+      setProteinFloor(s.protein_floor_g?.toString() || '150');
+      setSupplements(s.supplements || []);
       setTimezone(s.timezone || 'America/New_York');
     } catch (err) {
       setError('Failed to load settings');
     } finally {
       setLoading(false);
     }
+  };
+
+  // --- Supplement list editing ---
+  const slugify = (name: string) =>
+    name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'supplement';
+
+  const addSupplement = () => {
+    setSupplements((prev) => [...prev, { id: `new_${prev.length}`, name: '', detail: '' }]);
+  };
+
+  const updateSupplement = (index: number, field: 'name' | 'detail', value: string) => {
+    setSupplements((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, [field]: value } : s))
+    );
+  };
+
+  const removeSupplement = (index: number) => {
+    setSupplements((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Drop blank rows. Preserve existing ids (so checklist history stays linked);
+  // only generate a stable id for newly-added rows.
+  const cleanedSupplements = (): Supplement[] => {
+    const seen = new Set<string>();
+    return supplements
+      .filter((s) => s.name.trim())
+      .map((s) => {
+        let id = s.id && !s.id.startsWith('new_') ? s.id : slugify(s.name);
+        while (seen.has(id)) id = `${id}_`;
+        seen.add(id);
+        return { id, name: s.name.trim(), detail: s.detail?.trim() || undefined };
+      });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -96,6 +141,10 @@ export default function SettingsPage() {
           age_years: ageYears ? parseInt(ageYears) : null,
           sex: sex || null,
           calorie_deficit: parseInt(calorieDeficit) || 500,
+          saturated_fat_percent: satFatPercent ? parseFloat(satFatPercent) : 7,
+          protein_g_per_kg: proteinGPerKg ? parseFloat(proteinGPerKg) : 1.8,
+          protein_floor_g: proteinFloor ? parseInt(proteinFloor) : 150,
+          supplements: cleanedSupplements(),
           timezone,
           current_password: currentPassword || undefined,
           new_password: newPassword || undefined,
@@ -238,24 +287,130 @@ export default function SettingsPage() {
           {/* Goals Section */}
           <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="mb-4 text-lg font-medium text-zinc-900 dark:text-zinc-100">
-              Goals
+              Goals &amp; Targets
             </h2>
-            <div>
-              <label htmlFor="deficit" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Daily Calorie Deficit
-              </label>
-              <input
-                id="deficit"
-                type="number"
-                value={calorieDeficit}
-                onChange={(e) => setCalorieDeficit(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                placeholder="500"
-              />
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Subtracted from TDEE. Use 0 for maintenance, negative for surplus.
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="deficit" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Daily Calorie Deficit
+                </label>
+                <input
+                  id="deficit"
+                  type="number"
+                  value={calorieDeficit}
+                  onChange={(e) => setCalorieDeficit(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  placeholder="300"
+                />
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Subtracted from TDEE. Use 0 for maintenance, negative for surplus.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="satFat" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Saturated Fat Limit (% of calories)
+                </label>
+                <input
+                  id="satFat"
+                  type="number"
+                  step="0.5"
+                  value={satFatPercent}
+                  onChange={(e) => setSatFatPercent(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  placeholder="7"
+                />
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Daily saturated fat cap as a percentage of calories (e.g. 7%).
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="proteinPerKg" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Protein (g per kg)
+                  </label>
+                  <input
+                    id="proteinPerKg"
+                    type="number"
+                    step="0.1"
+                    value={proteinGPerKg}
+                    onChange={(e) => setProteinGPerKg(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    placeholder="1.8"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="proteinFloor" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Protein Floor (g)
+                  </label>
+                  <input
+                    id="proteinFloor"
+                    type="number"
+                    value={proteinFloor}
+                    onChange={(e) => setProteinFloor(e.target.value)}
+                    className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    placeholder="150"
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Protein target = max(weight × g/kg, floor). With your weight, the higher of the two applies.
               </p>
             </div>
+          </section>
+
+          {/* Supplements Section */}
+          <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
+                Supplements
+              </h2>
+              <button
+                type="button"
+                onClick={addSupplement}
+                className="rounded-lg bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                + Add
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+              These appear as daily toggles on your dashboard. Add, rename, or remove as your stack changes.
+            </p>
+            {supplements.length === 0 ? (
+              <p className="text-sm text-zinc-400">No supplements yet. Click “Add” to create one.</p>
+            ) : (
+              <div className="space-y-3">
+                {supplements.map((s, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+                      <input
+                        type="text"
+                        value={s.name}
+                        onChange={(e) => updateSupplement(i, 'name', e.target.value)}
+                        placeholder="Name (e.g. Creatine)"
+                        className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                      <input
+                        type="text"
+                        value={s.detail || ''}
+                        onChange={(e) => updateSupplement(i, 'detail', e.target.value)}
+                        placeholder="Detail (e.g. 5g, AM with water)"
+                        className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeSupplement(i)}
+                      aria-label="Remove supplement"
+                      className="mt-1 rounded-lg px-2 py-1.5 text-sm text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Timezone Section */}

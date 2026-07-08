@@ -76,7 +76,7 @@ export function calculateTDEE(
  * Calculate full TDEE from user settings and activity level
  */
 export function calculateFullTDEE(
-  settings: Pick<UserSettings, 'weight_kg' | 'height_cm' | 'age_years' | 'sex' | 'calorie_deficit'>,
+  settings: Pick<UserSettings, 'weight_kg' | 'height_cm' | 'age_years' | 'sex' | 'calorie_deficit' | 'protein_g_per_kg' | 'protein_floor_g'>,
   activityLevel: ActivityLevelOption
 ): TDEECalculation | null {
   if (!settings.weight_kg || !settings.height_cm || !settings.age_years || !settings.sex) {
@@ -100,13 +100,31 @@ export function calculateFullTDEE(
     settings.calorie_deficit
   );
 
-  // Protein target: 1.6g per kg of body weight
-  const proteinTarget = Math.round(settings.weight_kg * 1.6);
+  // Protein target: configurable g/kg of body weight, with an absolute floor.
+  const proteinTarget = proteinTargetGrams(
+    settings.weight_kg,
+    settings.protein_g_per_kg,
+    settings.protein_floor_g
+  );
 
   return {
     ...tdeeCalc,
     protein_target_g: proteinTarget,
   };
+}
+
+/**
+ * Protein target in grams: max(weight × g/kg, absolute floor).
+ * Falls back to sensible defaults (1.8 g/kg, 150 g floor) if config is missing.
+ */
+export function proteinTargetGrams(
+  weightKg: number,
+  gPerKg?: number | null,
+  floorG?: number | null
+): number {
+  const perKg = gPerKg ?? 1.8;
+  const floor = floorG ?? 150;
+  return Math.max(Math.round(weightKg * perKg), floor);
 }
 
 /**

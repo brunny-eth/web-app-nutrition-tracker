@@ -6,6 +6,13 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+// A supplement in the user's configurable stack
+export interface Supplement {
+  id: string;
+  name: string;
+  detail?: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -20,6 +27,10 @@ export interface Database {
           age_years: number | null;
           sex: 'male' | 'female' | null;
           calorie_deficit: number;
+          saturated_fat_percent: number;
+          protein_g_per_kg: number;
+          protein_floor_g: number;
+          supplements: Supplement[];
           timezone: string;
           created_at: string;
           updated_at: string;
@@ -34,6 +45,10 @@ export interface Database {
           age_years?: number | null;
           sex?: 'male' | 'female' | null;
           calorie_deficit?: number;
+          saturated_fat_percent?: number;
+          protein_g_per_kg?: number;
+          protein_floor_g?: number;
+          supplements?: Supplement[];
           timezone?: string;
           created_at?: string;
           updated_at?: string;
@@ -48,7 +63,40 @@ export interface Database {
           age_years?: number | null;
           sex?: 'male' | 'female' | null;
           calorie_deficit?: number;
+          saturated_fat_percent?: number;
+          protein_g_per_kg?: number;
+          protein_floor_g?: number;
+          supplements?: Supplement[];
           timezone?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      daily_checklist: {
+        Row: {
+          id: string;
+          user_id: string;
+          resolved_date: string;
+          supplements_taken: string[];
+          alcohol: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          resolved_date: string;
+          supplements_taken?: string[];
+          alcohol?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          resolved_date?: string;
+          supplements_taken?: string[];
+          alcohol?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -324,6 +372,7 @@ export interface Database {
 export type UserSettings = Database['public']['Tables']['user_settings']['Row'];
 export type ActivityLevel = Database['public']['Tables']['activity_levels']['Row'];
 export type DailyActivity = Database['public']['Tables']['daily_activity']['Row'];
+export type DailyChecklist = Database['public']['Tables']['daily_checklist']['Row'];
 export type Entry = Database['public']['Tables']['entries']['Row'];
 export type EntryItem = Database['public']['Tables']['entry_items']['Row'];
 export type DailyTotals = Database['public']['Views']['daily_totals']['Row'];
