@@ -15,6 +15,8 @@ interface DailySummaryProps {
   sodium: NutrientValue;
   potassium: NutrientValue;
   targetCalories?: number;
+  tdee?: number;
+  bmr?: number;
   targetProtein?: number;
   satFatPercent?: number;
   sex?: 'male' | 'female' | null;
@@ -70,6 +72,8 @@ export function DailySummary({
   sodium,
   potassium,
   targetCalories,
+  tdee,
+  bmr,
   targetProtein,
   satFatPercent,
   sex,
@@ -93,6 +97,8 @@ export function DailySummary({
           low={calories.low}
           high={calories.high}
           target={targetCalories}
+          max={tdee}
+          floor={bmr}
           unit="kcal"
           type="calories"
         />
@@ -145,58 +151,75 @@ interface PrimaryCardProps {
   low: number;
   high: number;
   target?: number;
+  max?: number; // upper bound of the "good" zone (TDEE for calories)
+  floor?: number; // below this = danger red (BMR for calories)
   unit: string;
   type: 'calories' | 'protein';
 }
 
-function PrimaryCard({ label, value, low, high, target, unit, type }: PrimaryCardProps) {
-  // Calories: green when under target (deficit), red when over
-  // Protein: green when at/above target, red when below
+function PrimaryCard({ label, value, low, high, target, max, floor, unit, type }: PrimaryCardProps) {
+  // Calories: green inside [target, TDEE]. Between BMR and target = mild under (amber);
+  //   below BMR = too aggressive (red); above TDEE = surplus (red).
+  // Protein: green at/above target, red below.
   const progress = target ? Math.min((value / target) * 100, 100) : 0;
-  
-  let isGood: boolean;
-  if (type === 'calories') {
-    isGood = !target || value <= target; // Under or at target = good
+
+  // 'neutral' grey (nothing logged) · 'good' green · 'low' amber · 'critical' red
+  let status: 'neutral' | 'good' | 'low' | 'critical';
+  let overTdee = false;
+  if (value <= 0) {
+    status = 'neutral';
+  } else if (type === 'calories') {
+    if (max && value > max) {
+      status = 'critical';
+      overTdee = true;
+    } else if (target && value < target) {
+      status = floor && value < floor ? 'critical' : 'low';
+    } else {
+      status = 'good';
+    }
   } else {
-    isGood = !target || value >= target; // At or above target = good
+    status = !target || value >= target ? 'good' : 'critical';
   }
 
-  const textColor = isGood 
-    ? 'text-green-600 dark:text-green-400' 
-    : 'text-red-600 dark:text-red-400';
-  
-  const bgColor = isGood
-    ? 'bg-green-50 dark:bg-green-950/30'
-    : 'bg-red-50 dark:bg-red-950/30';
-
-  const barColor = isGood ? '#22c55e' : '#ef4444';
+  const palette = {
+    neutral: { text: 'text-zinc-700 dark:text-zinc-200', bg: 'bg-zinc-100 dark:bg-zinc-800/50', bar: '#71717a' },
+    good: { text: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-950/30', bar: '#22c55e' },
+    low: { text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/30', bar: '#f59e0b' },
+    critical: { text: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/30', bar: '#ef4444' },
+  }[status];
 
   return (
-    <div className={`rounded-xl p-4 ${bgColor}`}>
+    <div className={`rounded-xl p-4 ${palette.bg}`}>
       <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{label}</p>
-      <p className={`mt-1 text-3xl font-bold ${textColor}`}>
+      <p className={`mt-1 text-3xl font-bold ${palette.text}`}>
         {Math.round(value)}
         <span className="text-base font-normal text-zinc-400 ml-1">{unit}</span>
       </p>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
         {Math.round(low)}–{Math.round(high)} range
       </p>
-      
+
       {target && (
         <div className="mt-3">
           <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
             <div
               className="h-full rounded-full transition-all"
-              style={{ 
-                width: `${progress}%`, 
-                backgroundColor: barColor
+              style={{
+                width: `${progress}%`,
+                backgroundColor: palette.bar,
               }}
             />
           </div>
           <p className="mt-1.5 text-xs text-zinc-500">
             {Math.round(value)} / {target} {unit}
-            {type === 'calories' && value > target && (
-              <span className="text-red-500 ml-1">(+{Math.round(value - target)} over)</span>
+            {type === 'calories' && overTdee && max && (
+              <span className="text-red-500 ml-1">(+{Math.round(value - max)} over TDEE)</span>
+            )}
+            {type === 'calories' && !overTdee && status === 'low' && (
+              <span className="text-amber-500 ml-1">({Math.round(target - value)} under — eating a little light)</span>
+            )}
+            {type === 'calories' && !overTdee && status === 'critical' && (
+              <span className="text-red-500 ml-1">({Math.round(target - value)} under — below BMR, too aggressive)</span>
             )}
             {type === 'protein' && value < target && (
               <span className="text-red-500 ml-1">({Math.round(target - value)} to go)</span>

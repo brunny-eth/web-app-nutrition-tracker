@@ -240,6 +240,8 @@ export default function Home() {
 
   // Calculate TDEE targets if settings available
   let targetCalories: number | undefined;
+  let tdeeCalories: number | undefined;
+  let bmrCalories: number | undefined;
   let targetProtein: number | undefined;
 
   if (authStatus?.settings) {
@@ -255,6 +257,8 @@ export default function Home() {
       // Use activity multiplier directly (default to moderate 1.55)
       const multiplier = activityData?.multiplier ?? 1.55;
       const tdee = bmr * multiplier;
+      bmrCalories = Math.round(bmr);
+      tdeeCalories = Math.round(tdee);
       targetCalories = Math.round(tdee - calorie_deficit);
       targetProtein = proteinTargetGrams(
         weight_kg,
@@ -365,6 +369,8 @@ export default function Home() {
               sodium={totals.sodium}
               potassium={totals.potassium}
               targetCalories={targetCalories}
+              tdee={tdeeCalories}
+              bmr={bmrCalories}
               targetProtein={targetProtein}
               satFatPercent={authStatus.settings?.saturated_fat_percent}
               sex={authStatus.settings?.sex}
