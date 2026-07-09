@@ -122,7 +122,7 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
           >
             {checklist.alcohol ? '✓' : ''}
           </span>
-          {checklist.alcohol ? 'Had alcohol today' : 'Alcohol-free day'}
+          Drank alcohol
         </button>
       </div>
 

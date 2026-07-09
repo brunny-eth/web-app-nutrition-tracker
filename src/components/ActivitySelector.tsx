@@ -16,12 +16,13 @@ interface ActivitySelectorProps {
   onSelect: (activity: ActivityData) => void;
 }
 
+// Fixed Harris-Benedict multipliers — presets set these directly, no LLM call.
 const PRESETS = [
-  { label: 'Rest', description: 'Sedentary day, no exercise, mostly sitting' },
-  { label: 'Light', description: 'Light exercise or walking, mostly desk work' },
-  { label: 'Moderate', description: 'Moderate exercise for 30-60 minutes, mix of sitting and moving' },
-  { label: 'Active', description: 'Hard exercise for 60+ minutes, physically active day' },
-  { label: 'V. Active', description: 'Very hard exercise or physical labor, intense training' },
+  { label: 'Rest', multiplier: 1.2, multiplier_low: 1.15, multiplier_high: 1.25, description: 'Sedentary day, no exercise, mostly sitting' },
+  { label: 'Light', multiplier: 1.375, multiplier_low: 1.3, multiplier_high: 1.45, description: 'Light exercise or walking, mostly desk work' },
+  { label: 'Moderate', multiplier: 1.55, multiplier_low: 1.5, multiplier_high: 1.6, description: 'Moderate exercise for 30-60 minutes, mix of sitting and moving' },
+  { label: 'Active', multiplier: 1.725, multiplier_low: 1.65, multiplier_high: 1.8, description: 'Hard exercise for 60+ minutes, physically active day' },
+  { label: 'V. Active', multiplier: 1.9, multiplier_low: 1.8, multiplier_high: 2.0, description: 'Very hard exercise or physical labor, intense training' },
 ];
 
 export function ActivitySelector({ currentActivity, date, onSelect }: ActivitySelectorProps) {
@@ -89,9 +90,44 @@ export function ActivitySelector({ currentActivity, date, onSelect }: ActivitySe
     submitDescription(inputValue);
   };
 
-  const handlePresetClick = (preset: typeof PRESETS[number]) => {
-    setInputValue(preset.description);
-    submitDescription(preset.description);
+  // Presets set a fixed multiplier directly — no LLM estimate call.
+  const handlePresetClick = async (preset: typeof PRESETS[number]) => {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const saveRes = await fetch('/api/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date,
+          multiplier: preset.multiplier,
+          multiplier_low: preset.multiplier_low,
+          multiplier_high: preset.multiplier_high,
+          summary: preset.description,
+          description: preset.label,
+        }),
+      });
+
+      if (!saveRes.ok) {
+        throw new Error('Failed to save activity');
+      }
+
+      onSelect({
+        multiplier: preset.multiplier,
+        multiplier_low: preset.multiplier_low,
+        multiplier_high: preset.multiplier_high,
+        summary: preset.description,
+        description: preset.label,
+      });
+
+      setInputValue('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -126,18 +162,28 @@ export function ActivitySelector({ currentActivity, date, onSelect }: ActivitySe
         </button>
       </form>
 
-      {/* Preset chips */}
+      {/* Preset chips — one tap, no LLM */}
       <div className="mt-2 flex gap-1.5">
-        {PRESETS.map((preset) => (
-          <button
-            key={preset.label}
-            onClick={() => handlePresetClick(preset)}
-            disabled={loading}
-            className="flex-1 rounded-lg bg-zinc-100 px-1.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-          >
-            {preset.label}
-          </button>
-        ))}
+        {PRESETS.map((preset) => {
+          const isActive =
+            currentActivity != null &&
+            Math.abs(currentActivity.multiplier - preset.multiplier) < 0.001;
+          return (
+            <button
+              key={preset.label}
+              onClick={() => handlePresetClick(preset)}
+              disabled={loading}
+              title={preset.description}
+              className={`flex-1 rounded-lg px-1.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                isActive
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Error */}
