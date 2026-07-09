@@ -15,7 +15,8 @@ interface DailyChecklist {
   resolved_date: string;
   supplements_taken: string[];
   alcohol: boolean;
-  resting_hr: number | null;
+  bp_systolic: number | null;
+  bp_diastolic: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,10 +85,13 @@ export async function POST(request: NextRequest) {
     const alcohol = typeof body.alcohol === 'boolean'
       ? (body.alcohol as boolean)
       : (existing?.alcohol ?? false);
-    // resting_hr: undefined = not provided (keep existing); null or number = set explicitly.
-    const resting_hr = body.resting_hr !== undefined
-      ? (body.resting_hr === null ? null : Number(body.resting_hr))
-      : (existing?.resting_hr ?? null);
+    // BP: undefined = not provided (keep existing); null or number = set explicitly.
+    const bp_systolic = body.bp_systolic !== undefined
+      ? (body.bp_systolic === null ? null : Number(body.bp_systolic))
+      : (existing?.bp_systolic ?? null);
+    const bp_diastolic = body.bp_diastolic !== undefined
+      ? (body.bp_diastolic === null ? null : Number(body.bp_diastolic))
+      : (existing?.bp_diastolic ?? null);
 
     const { data, error } = await supabase
       .from('daily_checklist')
@@ -97,7 +101,8 @@ export async function POST(request: NextRequest) {
           resolved_date: date,
           supplements_taken,
           alcohol,
-          resting_hr,
+          bp_systolic,
+          bp_diastolic,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,resolved_date' }

@@ -6,7 +6,8 @@ import type { Supplement } from '@/types/database';
 export interface ChecklistData {
   supplements_taken: string[];
   alcohol: boolean;
-  resting_hr: number | null;
+  bp_systolic: number | null;
+  bp_diastolic: number | null;
 }
 
 interface DailyChecklistProps {
@@ -19,11 +20,13 @@ interface DailyChecklistProps {
 export function DailyChecklist({ supplements, date, checklist, onChange }: DailyChecklistProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Local input so typing doesn't hit the API on every keystroke; synced when the day changes.
-  const [hrInput, setHrInput] = useState(checklist.resting_hr?.toString() ?? '');
+  // Local inputs so typing doesn't hit the API on every keystroke; synced when the day changes.
+  const [sysInput, setSysInput] = useState(checklist.bp_systolic?.toString() ?? '');
+  const [diaInput, setDiaInput] = useState(checklist.bp_diastolic?.toString() ?? '');
   useEffect(() => {
-    setHrInput(checklist.resting_hr?.toString() ?? '');
-  }, [checklist.resting_hr, date]);
+    setSysInput(checklist.bp_systolic?.toString() ?? '');
+    setDiaInput(checklist.bp_diastolic?.toString() ?? '');
+  }, [checklist.bp_systolic, checklist.bp_diastolic, date]);
 
   const persist = async (next: ChecklistData) => {
     // Optimistic update — reflect the toggle immediately, roll back on failure.
@@ -57,16 +60,26 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
     persist({ ...checklist, alcohol: !checklist.alcohol });
   };
 
-  const commitHr = () => {
-    const trimmed = hrInput.trim();
-    const parsed = trimmed === '' ? null : Math.round(Number(trimmed));
-    // Ignore invalid input; reset the field to the saved value.
-    if (parsed !== null && (!Number.isFinite(parsed) || parsed <= 0)) {
-      setHrInput(checklist.resting_hr?.toString() ?? '');
+  const commitBp = () => {
+    const sysStr = sysInput.trim();
+    const diaStr = diaInput.trim();
+
+    // Both blank → clear the reading.
+    if (sysStr === '' && diaStr === '') {
+      if (checklist.bp_systolic === null && checklist.bp_diastolic === null) return;
+      persist({ ...checklist, bp_systolic: null, bp_diastolic: null });
       return;
     }
-    if (parsed === checklist.resting_hr) return; // no change
-    persist({ ...checklist, resting_hr: parsed });
+
+    // Partial (one filled) → incomplete pair, wait until both are entered.
+    if (sysStr === '' || diaStr === '') return;
+
+    const sys = Math.round(Number(sysStr));
+    const dia = Math.round(Number(diaStr));
+    if (!Number.isFinite(sys) || !Number.isFinite(dia) || sys <= 0 || dia <= 0) return;
+
+    if (sys === checklist.bp_systolic && dia === checklist.bp_diastolic) return; // no change
+    persist({ ...checklist, bp_systolic: sys, bp_diastolic: dia });
   };
 
   const takenCount = checklist.supplements_taken.filter((id) =>
@@ -144,25 +157,41 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
         </button>
       </div>
 
-      {/* Resting heart rate (optional, logged occasionally) */}
+      {/* Blood pressure (optional, logged occasionally) */}
       <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-        <label htmlFor="resting-hr" className="text-sm text-zinc-500 dark:text-zinc-400">
-          Resting HR
+        <label htmlFor="bp-sys" className="text-sm text-zinc-500 dark:text-zinc-400">
+          Blood Pressure
         </label>
         <input
-          id="resting-hr"
+          id="bp-sys"
           type="number"
           inputMode="numeric"
-          value={hrInput}
-          onChange={(e) => setHrInput(e.target.value)}
-          onBlur={commitHr}
+          value={sysInput}
+          onChange={(e) => setSysInput(e.target.value)}
+          onBlur={commitBp}
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
           }}
-          placeholder="—"
-          className="w-20 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          placeholder="sys"
+          aria-label="Systolic"
+          className="w-16 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-center text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
         />
-        <span className="text-xs text-zinc-400">bpm</span>
+        <span className="text-zinc-400">/</span>
+        <input
+          id="bp-dia"
+          type="number"
+          inputMode="numeric"
+          value={diaInput}
+          onChange={(e) => setDiaInput(e.target.value)}
+          onBlur={commitBp}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          placeholder="dia"
+          aria-label="Diastolic"
+          className="w-16 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-center text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+        />
+        <span className="text-xs text-zinc-400">mmHg</span>
       </div>
 
       {error && <p className="mt-2 text-xs text-red-500">{error}</p>}

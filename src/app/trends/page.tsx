@@ -29,7 +29,8 @@ interface ChartDataPoint {
   sodium: number;
   potassium: number;
   kNaRatio: number | null;
-  restingHr: number | null;
+  bpSystolic: number | null;
+  bpDiastolic: number | null;
   tdee: number | null;
   targetCalories: number | null;
   targetProtein: number | null;
@@ -471,13 +472,13 @@ export default function TrendsPage() {
           </section>
         </div>
 
-        {/* Resting Heart Rate (sparse — only days logged) */}
+        {/* Blood Pressure (sparse — only days logged) */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
-            Resting Heart Rate
+            Blood Pressure
           </h2>
-          <p className="mb-4 text-xs text-zinc-500">Logged occasionally · bpm</p>
-          {chartData.filter((d) => d.restingHr != null).length === 0 ? (
+          <p className="mb-4 text-xs text-zinc-500">Logged occasionally · mmHg (systolic / diastolic)</p>
+          {chartData.filter((d) => d.bpSystolic != null || d.bpDiastolic != null).length === 0 ? (
             <p className="py-8 text-center text-sm text-zinc-500">No readings in this period</p>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
@@ -493,15 +494,25 @@ export default function TrendsPage() {
                   contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                   labelFormatter={formatTooltipLabel}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(value: any) => [Math.round(value || 0) + ' bpm', 'Resting HR']}
+                  formatter={(value: any, name: any) => [Math.round(value || 0) + ' mmHg', name]}
                 />
+                <Legend />
                 <Line
                   type="monotone"
-                  dataKey="restingHr"
+                  dataKey="bpSystolic"
                   stroke="#ef4444"
                   strokeWidth={2}
                   dot={{ fill: '#ef4444', r: 3 }}
-                  name="Resting HR"
+                  name="Systolic"
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="bpDiastolic"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={{ fill: '#3b82f6', r: 3 }}
+                  name="Diastolic"
                   connectNulls
                 />
               </ComposedChart>
