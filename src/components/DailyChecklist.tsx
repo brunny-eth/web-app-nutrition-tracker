@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Supplement } from '@/types/database';
 
 export interface ChecklistData {
   supplements_taken: string[];
   alcohol: boolean;
+  resting_hr: number | null;
 }
 
 interface DailyChecklistProps {
@@ -18,6 +19,11 @@ interface DailyChecklistProps {
 export function DailyChecklist({ supplements, date, checklist, onChange }: DailyChecklistProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Local input so typing doesn't hit the API on every keystroke; synced when the day changes.
+  const [hrInput, setHrInput] = useState(checklist.resting_hr?.toString() ?? '');
+  useEffect(() => {
+    setHrInput(checklist.resting_hr?.toString() ?? '');
+  }, [checklist.resting_hr, date]);
 
   const persist = async (next: ChecklistData) => {
     // Optimistic update — reflect the toggle immediately, roll back on failure.
@@ -49,6 +55,18 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
 
   const toggleAlcohol = () => {
     persist({ ...checklist, alcohol: !checklist.alcohol });
+  };
+
+  const commitHr = () => {
+    const trimmed = hrInput.trim();
+    const parsed = trimmed === '' ? null : Math.round(Number(trimmed));
+    // Ignore invalid input; reset the field to the saved value.
+    if (parsed !== null && (!Number.isFinite(parsed) || parsed <= 0)) {
+      setHrInput(checklist.resting_hr?.toString() ?? '');
+      return;
+    }
+    if (parsed === checklist.resting_hr) return; // no change
+    persist({ ...checklist, resting_hr: parsed });
   };
 
   const takenCount = checklist.supplements_taken.filter((id) =>
@@ -124,6 +142,27 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
           </span>
           Drank alcohol
         </button>
+      </div>
+
+      {/* Resting heart rate (optional, logged occasionally) */}
+      <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <label htmlFor="resting-hr" className="text-sm text-zinc-500 dark:text-zinc-400">
+          Resting HR
+        </label>
+        <input
+          id="resting-hr"
+          type="number"
+          inputMode="numeric"
+          value={hrInput}
+          onChange={(e) => setHrInput(e.target.value)}
+          onBlur={commitHr}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          placeholder="—"
+          className="w-20 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+        />
+        <span className="text-xs text-zinc-400">bpm</span>
       </div>
 
       {error && <p className="mt-2 text-xs text-red-500">{error}</p>}

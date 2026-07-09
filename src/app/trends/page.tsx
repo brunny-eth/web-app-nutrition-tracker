@@ -29,6 +29,7 @@ interface ChartDataPoint {
   sodium: number;
   potassium: number;
   kNaRatio: number | null;
+  restingHr: number | null;
   tdee: number | null;
   targetCalories: number | null;
   targetProtein: number | null;
@@ -469,6 +470,44 @@ export default function TrendsPage() {
             )}
           </section>
         </div>
+
+        {/* Resting Heart Rate (sparse — only days logged) */}
+        <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+            Resting Heart Rate
+          </h2>
+          <p className="mb-4 text-xs text-zinc-500">Logged occasionally · bpm</p>
+          {chartData.filter((d) => d.restingHr != null).length === 0 ? (
+            <p className="py-8 text-center text-sm text-zinc-500">No readings in this period</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatDate}
+                  tick={{ fontSize: 12, fill: '#71717a' }}
+                />
+                <YAxis tick={{ fontSize: 12, fill: '#71717a' }} domain={['auto', 'auto']} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
+                  labelFormatter={formatTooltipLabel}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(value: any) => [Math.round(value || 0) + ' bpm', 'Resting HR']}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="restingHr"
+                  stroke="#ef4444"
+                  strokeWidth={2}
+                  dot={{ fill: '#ef4444', r: 3 }}
+                  name="Resting HR"
+                  connectNulls
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </section>
 
         {/* Detailed Averages */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">

@@ -78,7 +78,7 @@ export default function Home() {
   const [yesterday, setYesterday] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [activityData, setActivityData] = useState<ActivityData | null>(null);
-  const [checklist, setChecklist] = useState<ChecklistData>({ supplements_taken: [], alcohol: false });
+  const [checklist, setChecklist] = useState<ChecklistData>({ supplements_taken: [], alcohol: false, resting_hr: null });
   const [loadingEntries, setLoadingEntries] = useState(false);
 
   // Check auth status on mount
@@ -172,10 +172,11 @@ export default function Home() {
       setChecklist({
         supplements_taken: c?.supplements_taken ?? [],
         alcohol: c?.alcohol ?? false,
+        resting_hr: c?.resting_hr ?? null,
       });
     } catch (error) {
       console.error('Failed to fetch checklist:', error);
-      setChecklist({ supplements_taken: [], alcohol: false });
+      setChecklist({ supplements_taken: [], alcohol: false, resting_hr: null });
     }
   };
 

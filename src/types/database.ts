@@ -79,6 +79,7 @@ export interface Database {
           resolved_date: string;
           supplements_taken: string[];
           alcohol: boolean;
+          resting_hr: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -88,6 +89,7 @@ export interface Database {
           resolved_date: string;
           supplements_taken?: string[];
           alcohol?: boolean;
+          resting_hr?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -97,6 +99,7 @@ export interface Database {
           resolved_date?: string;
           supplements_taken?: string[];
           alcohol?: boolean;
+          resting_hr?: number | null;
           created_at?: string;
           updated_at?: string;
         };

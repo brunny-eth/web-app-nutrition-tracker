@@ -68,10 +68,16 @@ export async function GET(request: NextRequest) {
   // Get supplement/alcohol checklist for each day
   const { data: checklists } = await supabase
     .from('daily_checklist')
-    .select('resolved_date, supplements_taken, alcohol')
+    .select('resolved_date, supplements_taken, alcohol, resting_hr')
     .eq('user_id', userId)
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr);
+
+  // Resting HR lookup (sparse — only days the user logged one)
+  const hrMap: Record<string, number> = {};
+  checklists?.forEach((c) => {
+    if (c.resting_hr != null) hrMap[c.resolved_date] = c.resting_hr;
+  });
 
   // Build activity lookup
   const activityMap: Record<string, number> = {};
@@ -163,9 +169,10 @@ export async function GET(request: NextRequest) {
       proteinPercent: data.targetProtein 
         ? Math.round((data.protein / data.targetProtein) * 100) 
         : null,
-      kNaRatio: data.sodium > 0 && data.potassium > 0 
-        ? data.potassium / data.sodium 
+      kNaRatio: data.sodium > 0 && data.potassium > 0
+        ? data.potassium / data.sodium
         : null,
+      restingHr: hrMap[date] ?? null,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
