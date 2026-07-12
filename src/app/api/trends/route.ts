@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserId } from '@/lib/auth';
+import { supplementFiberBonus } from '@/lib/supplements';
 
 function getSupabase() {
   return createClient(
@@ -79,6 +80,12 @@ export async function GET(request: NextRequest) {
     if (c.bp_systolic != null || c.bp_diastolic != null) {
       bpMap[c.resolved_date] = { sys: c.bp_systolic ?? null, dia: c.bp_diastolic ?? null };
     }
+  });
+
+  // Supplements taken per day, for folding psyllium's fiber into daily totals.
+  const supplementsTakenByDate: Record<string, string[]> = {};
+  checklists?.forEach((c) => {
+    supplementsTakenByDate[c.resolved_date] = c.supplements_taken ?? [];
   });
 
   // Build activity lookup
@@ -160,6 +167,16 @@ export async function GET(request: NextRequest) {
       dailyData[date].sodium += item.sodium_mg || 0;
       dailyData[date].potassium += item.potassium_mg || 0;
     });
+  });
+
+  // Fold psyllium's fiber into each day's total, matching the daily view.
+  // Only days with logged food appear here; a psyllium-only day with no food
+  // logged won't show in trends, which is an acceptable edge case.
+  Object.keys(dailyData).forEach((date) => {
+    dailyData[date].fiber += supplementFiberBonus(
+      settings?.supplements,
+      supplementsTakenByDate[date]
+    );
   });
 
   // Convert to array and sort

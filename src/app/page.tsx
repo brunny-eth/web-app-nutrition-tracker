@@ -9,6 +9,7 @@ import { EntryList } from '@/components/EntryList';
 import { ActivitySelector, type ActivityData } from '@/components/ActivitySelector';
 import { DailyChecklist, type ChecklistData } from '@/components/DailyChecklist';
 import { proteinTargetGrams } from '@/lib/tdee';
+import { supplementFiberBonus } from '@/lib/supplements';
 import type { Supplement } from '@/types/database';
 
 interface AuthStatus {
@@ -237,6 +238,16 @@ export default function Home() {
       potassium: { value: 0, low: 0, high: 0 },
     }
   );
+
+  // Fold psyllium's fiber into the total when it's ticked in today's checklist.
+  // Recomputes on every render, so the fiber card ticks up the instant the toggle flips.
+  const fiberBonus = supplementFiberBonus(
+    authStatus?.settings?.supplements,
+    checklist.supplements_taken
+  );
+  totals.fiber.value += fiberBonus;
+  totals.fiber.low += fiberBonus;
+  totals.fiber.high += fiberBonus;
 
   // Calculate TDEE targets if settings available
   let targetCalories: number | undefined;
