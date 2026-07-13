@@ -6,6 +6,7 @@ import type { Supplement } from '@/types/database';
 export interface ChecklistData {
   supplements_taken: string[];
   alcohol: boolean;
+  weight_kg: number | null;
   bp_systolic: number | null;
   bp_diastolic: number | null;
 }
@@ -23,10 +24,12 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
   // Local inputs so typing doesn't hit the API on every keystroke; synced when the day changes.
   const [sysInput, setSysInput] = useState(checklist.bp_systolic?.toString() ?? '');
   const [diaInput, setDiaInput] = useState(checklist.bp_diastolic?.toString() ?? '');
+  const [weightInput, setWeightInput] = useState(checklist.weight_kg?.toString() ?? '');
   useEffect(() => {
     setSysInput(checklist.bp_systolic?.toString() ?? '');
     setDiaInput(checklist.bp_diastolic?.toString() ?? '');
-  }, [checklist.bp_systolic, checklist.bp_diastolic, date]);
+    setWeightInput(checklist.weight_kg?.toString() ?? '');
+  }, [checklist.bp_systolic, checklist.bp_diastolic, checklist.weight_kg, date]);
 
   const persist = async (next: ChecklistData) => {
     // Optimistic update — reflect the toggle immediately, roll back on failure.
@@ -80,6 +83,23 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
 
     if (sys === checklist.bp_systolic && dia === checklist.bp_diastolic) return; // no change
     persist({ ...checklist, bp_systolic: sys, bp_diastolic: dia });
+  };
+
+  const commitWeight = () => {
+    const str = weightInput.trim();
+
+    // Blank → clear the reading.
+    if (str === '') {
+      if (checklist.weight_kg === null) return;
+      persist({ ...checklist, weight_kg: null });
+      return;
+    }
+
+    const weight = Number(str);
+    if (!Number.isFinite(weight) || weight <= 0) return;
+
+    if (weight === checklist.weight_kg) return; // no change
+    persist({ ...checklist, weight_kg: weight });
   };
 
   const takenCount = checklist.supplements_taken.filter((id) =>
@@ -157,8 +177,38 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
         </button>
       </div>
 
+      {/* Metrics (optional numbers, logged occasionally) */}
+      <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Metrics
+        </h3>
+
+        {/* Weight */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="weight" className="text-sm text-zinc-500 dark:text-zinc-400">
+            Weight
+          </label>
+          <input
+            id="weight"
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            value={weightInput}
+            onChange={(e) => setWeightInput(e.target.value)}
+            onBlur={commitWeight}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+            }}
+            placeholder="kg"
+            aria-label="Weight"
+            className="w-20 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-center text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+          <span className="text-xs text-zinc-400">kg</span>
+        </div>
+      </div>
+
       {/* Blood pressure (optional, logged occasionally) */}
-      <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+      <div className="mt-3 flex items-center gap-2 pt-1">
         <label htmlFor="bp-sys" className="text-sm text-zinc-500 dark:text-zinc-400">
           Blood Pressure
         </label>

@@ -79,7 +79,7 @@ export default function Home() {
   const [yesterday, setYesterday] = useState('');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [activityData, setActivityData] = useState<ActivityData | null>(null);
-  const [checklist, setChecklist] = useState<ChecklistData>({ supplements_taken: [], alcohol: false, bp_systolic: null, bp_diastolic: null });
+  const [checklist, setChecklist] = useState<ChecklistData>({ supplements_taken: [], alcohol: false, weight_kg: null, bp_systolic: null, bp_diastolic: null });
   const [loadingEntries, setLoadingEntries] = useState(false);
 
   // Check auth status on mount
@@ -173,12 +173,13 @@ export default function Home() {
       setChecklist({
         supplements_taken: c?.supplements_taken ?? [],
         alcohol: c?.alcohol ?? false,
+        weight_kg: c?.weight_kg ?? null,
         bp_systolic: c?.bp_systolic ?? null,
         bp_diastolic: c?.bp_diastolic ?? null,
       });
     } catch (error) {
       console.error('Failed to fetch checklist:', error);
-      setChecklist({ supplements_taken: [], alcohol: false, bp_systolic: null, bp_diastolic: null });
+      setChecklist({ supplements_taken: [], alcohol: false, weight_kg: null, bp_systolic: null, bp_diastolic: null });
     }
   };
 

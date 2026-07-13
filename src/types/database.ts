@@ -79,6 +79,7 @@ export interface Database {
           resolved_date: string;
           supplements_taken: string[];
           alcohol: boolean;
+          weight_kg: number | null;
           bp_systolic: number | null;
           bp_diastolic: number | null;
           created_at: string;
@@ -90,6 +91,7 @@ export interface Database {
           resolved_date: string;
           supplements_taken?: string[];
           alcohol?: boolean;
+          weight_kg?: number | null;
           bp_systolic?: number | null;
           bp_diastolic?: number | null;
           created_at?: string;
@@ -101,6 +103,7 @@ export interface Database {
           resolved_date?: string;
           supplements_taken?: string[];
           alcohol?: boolean;
+          weight_kg?: number | null;
           bp_systolic?: number | null;
           bp_diastolic?: number | null;
           created_at?: string;

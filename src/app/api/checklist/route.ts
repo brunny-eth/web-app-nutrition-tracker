@@ -15,6 +15,7 @@ interface DailyChecklist {
   resolved_date: string;
   supplements_taken: string[];
   alcohol: boolean;
+  weight_kg: number | null;
   bp_systolic: number | null;
   bp_diastolic: number | null;
   created_at: string;
@@ -85,7 +86,10 @@ export async function POST(request: NextRequest) {
     const alcohol = typeof body.alcohol === 'boolean'
       ? (body.alcohol as boolean)
       : (existing?.alcohol ?? false);
-    // BP: undefined = not provided (keep existing); null or number = set explicitly.
+    // weight/BP: undefined = not provided (keep existing); null or number = set explicitly.
+    const weight_kg = body.weight_kg !== undefined
+      ? (body.weight_kg === null ? null : Number(body.weight_kg))
+      : (existing?.weight_kg ?? null);
     const bp_systolic = body.bp_systolic !== undefined
       ? (body.bp_systolic === null ? null : Number(body.bp_systolic))
       : (existing?.bp_systolic ?? null);
@@ -101,6 +105,7 @@ export async function POST(request: NextRequest) {
           resolved_date: date,
           supplements_taken,
           alcohol,
+          weight_kg,
           bp_systolic,
           bp_diastolic,
           updated_at: new Date().toISOString(),
