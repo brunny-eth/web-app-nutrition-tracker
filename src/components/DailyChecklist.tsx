@@ -18,17 +18,24 @@ interface DailyChecklistProps {
   onChange: (checklist: ChecklistData) => void;
 }
 
+const KG_PER_LB = 0.45359237;
+const kgToLbs = (kg: number) => kg / KG_PER_LB;
+const lbsToKg = (lbs: number) => lbs * KG_PER_LB;
+// Weight is entered/displayed in lbs but stored in kg.
+const weightKgToInput = (kg: number | null) =>
+  kg === null ? '' : (Math.round(kgToLbs(kg) * 10) / 10).toString();
+
 export function DailyChecklist({ supplements, date, checklist, onChange }: DailyChecklistProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Local inputs so typing doesn't hit the API on every keystroke; synced when the day changes.
   const [sysInput, setSysInput] = useState(checklist.bp_systolic?.toString() ?? '');
   const [diaInput, setDiaInput] = useState(checklist.bp_diastolic?.toString() ?? '');
-  const [weightInput, setWeightInput] = useState(checklist.weight_kg?.toString() ?? '');
+  const [weightInput, setWeightInput] = useState(weightKgToInput(checklist.weight_kg));
   useEffect(() => {
     setSysInput(checklist.bp_systolic?.toString() ?? '');
     setDiaInput(checklist.bp_diastolic?.toString() ?? '');
-    setWeightInput(checklist.weight_kg?.toString() ?? '');
+    setWeightInput(weightKgToInput(checklist.weight_kg));
   }, [checklist.bp_systolic, checklist.bp_diastolic, checklist.weight_kg, date]);
 
   const persist = async (next: ChecklistData) => {
@@ -95,11 +102,12 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
       return;
     }
 
-    const weight = Number(str);
-    if (!Number.isFinite(weight) || weight <= 0) return;
+    const lbs = Number(str);
+    if (!Number.isFinite(lbs) || lbs <= 0) return;
 
-    if (weight === checklist.weight_kg) return; // no change
-    persist({ ...checklist, weight_kg: weight });
+    // No change if the entered lbs round-trips to what's already stored.
+    if (str === weightKgToInput(checklist.weight_kg)) return;
+    persist({ ...checklist, weight_kg: lbsToKg(lbs) });
   };
 
   const takenCount = checklist.supplements_taken.filter((id) =>
@@ -199,11 +207,11 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
             onKeyDown={(e) => {
               if (e.key === 'Enter') e.currentTarget.blur();
             }}
-            placeholder="kg"
+            placeholder="lbs"
             aria-label="Weight"
             className="w-20 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-center text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           />
-          <span className="text-xs text-zinc-400">kg</span>
+          <span className="text-xs text-zinc-400">lbs</span>
         </div>
       </div>
 
