@@ -193,10 +193,10 @@ function PrimaryCard({ label, value, low, high, target, max, floor, unit, type }
       <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{label}</p>
       <p className={`mt-1 text-3xl font-bold ${palette.text}`}>
         {Math.round(value)}
+        {high > low && (
+          <span className="text-base font-normal text-zinc-400 ml-1">± {Math.round((high - low) / 2)}</span>
+        )}
         <span className="text-base font-normal text-zinc-400 ml-1">{unit}</span>
-      </p>
-      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
-        {Math.round(low)}–{Math.round(high)} range
       </p>
 
       {target && (
@@ -325,6 +325,9 @@ function SecondaryCard({ label, value, low, high, unit, recommendation }: Second
       </div>
       <p className={`mt-0.5 text-lg font-semibold ${statusColors[status]}`}>
         {Math.round(value)}
+        {high > low && (
+          <span className="text-xs font-normal text-zinc-400 ml-0.5">± {Math.round((high - low) / 2)}</span>
+        )}
         <span className="text-xs font-normal text-zinc-400 ml-0.5">{unit}</span>
       </p>
       
@@ -347,10 +350,6 @@ function SecondaryCard({ label, value, low, high, unit, recommendation }: Second
           {statusText}
         </p>
       )}
-      
-      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-        {Math.round(low)}–{Math.round(high)} range
-      </p>
     </div>
   );
 }
