@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserId } from '@/lib/auth';
 import { supplementFiberBonus } from '@/lib/supplements';
+import { FALLBACK_ACTIVITY_MULTIPLIER, resolveActivityMultiplier } from '@/lib/tdee';
 import { roundLbs } from '@/lib/units';
 import { DEFAULT_SATURATED_FAT_PERCENT, saturatedFatPercentOfCalories } from '@/lib/targets';
 
@@ -60,10 +61,11 @@ export async function GET(request: NextRequest) {
     .lte('resolved_date', endDateStr)
     .order('resolved_date', { ascending: true });
 
-  // Get activity levels for each day
+  // Get activity levels for each day. `multiplier` is the newer continuous estimate;
+  // `activity_level_id` is the legacy 5-way level and is null whenever the former is set.
   const { data: activities } = await supabase
     .from('daily_activity')
-    .select('resolved_date, activity_level_id')
+    .select('resolved_date, activity_level_id, multiplier')
     .eq('user_id', userId)
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr);
@@ -106,14 +108,11 @@ export async function GET(request: NextRequest) {
     supplementsTakenByDate[c.resolved_date] = c.supplements_taken ?? [];
   });
 
-  // Build activity lookup
-  const activityMap: Record<string, number> = {};
+  // Build activity lookup, keyed by resolved multiplier so both row shapes are honored.
+  const multiplierByDate: Record<string, number> = {};
   activities?.forEach((a) => {
-    activityMap[a.resolved_date] = a.activity_level_id;
+    multiplierByDate[a.resolved_date] = resolveActivityMultiplier(a);
   });
-
-  // Activity multipliers
-  const multipliers = [1.2, 1.375, 1.55, 1.725, 1.9];
 
   // Calculate BMR if we have settings
   let bmr: number | null = null;
@@ -145,8 +144,7 @@ export async function GET(request: NextRequest) {
     const date = entry.resolved_date;
     if (!dailyData[date]) {
       // Calculate TDEE for this day
-      const activityLevel = activityMap[date] || 3; // Default to moderate
-      const multiplier = multipliers[activityLevel - 1];
+      const multiplier = multiplierByDate[date] ?? FALLBACK_ACTIVITY_MULTIPLIER;
       const tdee = bmr ? Math.round(bmr * multiplier) : null;
       const targetCalories = tdee && settings?.calorie_deficit 
         ? tdee - settings.calorie_deficit 

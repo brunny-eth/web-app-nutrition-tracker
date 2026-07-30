@@ -179,3 +179,24 @@ export const DEFAULT_ACTIVITY_LEVELS: ActivityLevelOption[] = [
 export function getActivityLevelById(id: number): ActivityLevelOption | undefined {
   return DEFAULT_ACTIVITY_LEVELS.find(level => level.id === id);
 }
+
+/** Moderate activity — used only when a day has no activity recorded at all. */
+export const FALLBACK_ACTIVITY_MULTIPLIER = 1.55;
+
+/**
+ * Resolve a day's activity multiplier from a daily_activity row.
+ *
+ * Rows come in two shapes: newer ones store a continuous estimated `multiplier`
+ * and leave `activity_level_id` null, older ones do the reverse. Reading only the
+ * legacy column silently scores every newer day as moderate, so both paths belong
+ * in one place.
+ */
+export function resolveActivityMultiplier(
+  row?: { multiplier?: number | null; activity_level_id?: number | null } | null
+): number {
+  if (row?.multiplier) return row.multiplier;
+  if (row?.activity_level_id) {
+    return getActivityLevelById(row.activity_level_id)?.multiplier ?? FALLBACK_ACTIVITY_MULTIPLIER;
+  }
+  return FALLBACK_ACTIVITY_MULTIPLIER;
+}

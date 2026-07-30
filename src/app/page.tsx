@@ -8,7 +8,7 @@ import { DailySummary } from '@/components/DailySummary';
 import { EntryList } from '@/components/EntryList';
 import { ActivitySelector, type ActivityData } from '@/components/ActivitySelector';
 import { DailyChecklist, type ChecklistData } from '@/components/DailyChecklist';
-import { proteinTargetGrams } from '@/lib/tdee';
+import { proteinTargetGrams, resolveActivityMultiplier } from '@/lib/tdee';
 import { supplementFiberBonus } from '@/lib/supplements';
 import type { Supplement } from '@/types/database';
 
@@ -153,9 +153,9 @@ export default function Home() {
           description: activity.description ?? undefined,
         });
       } else if (activity?.activity_level_id) {
-        // Old-style: map activity_level_id to multiplier for backward compat
-        const multipliers = [1.2, 1.375, 1.55, 1.725, 1.9];
-        const m = multipliers[activity.activity_level_id - 1] ?? 1.55;
+        // Old-style: map activity_level_id to multiplier for backward compat. A legacy
+        // level carries no range, so low/high collapse onto the point estimate.
+        const m = resolveActivityMultiplier(activity);
         setActivityData({ multiplier: m, multiplier_low: m, multiplier_high: m });
       } else {
         setActivityData(null);
