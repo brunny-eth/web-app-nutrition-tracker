@@ -38,6 +38,11 @@ interface ChartDataPoint {
   proteinPercent: number | null;
 }
 
+interface WeightPoint {
+  date: string;
+  weightLbs: number;
+}
+
 interface Averages {
   avgCalories: number;
   avgProtein: number;
@@ -68,6 +73,7 @@ interface Adherence {
 
 interface TrendsData {
   chartData: ChartDataPoint[];
+  weightData: WeightPoint[];
   averages: {
     week: Averages | null;
     month: Averages | null;
@@ -138,7 +144,11 @@ export default function TrendsPage() {
     );
   }
 
-  const { chartData, averages, adherence, recommendations, settings } = data;
+  const { chartData, weightData, averages, adherence, recommendations, settings } = data;
+  const weightPoints = weightData ?? [];
+  const latestWeight = weightPoints.at(-1) ?? null;
+  const weightChange =
+    weightPoints.length >= 2 ? weightPoints[weightPoints.length - 1].weightLbs - weightPoints[0].weightLbs : null;
   const monthAdh = adherence.month;
   const weekAdh = adherence.week;
 
@@ -472,53 +482,78 @@ export default function TrendsPage() {
           </section>
         </div>
 
-        {/* Blood Pressure (sparse — only days logged) */}
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
-            Blood Pressure
-          </h2>
-          <p className="mb-4 text-xs text-zinc-500">Logged occasionally · mmHg (systolic / diastolic)</p>
-          {chartData.filter((d) => d.bpSystolic != null || d.bpDiastolic != null).length === 0 ? (
-            <p className="py-8 text-center text-sm text-zinc-500">No readings in this period</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={formatDate}
-                  tick={{ fontSize: 12, fill: '#71717a' }}
-                />
-                <YAxis tick={{ fontSize: 12, fill: '#71717a' }} domain={['auto', 'auto']} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
-                  labelFormatter={formatTooltipLabel}
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(value: any, name: any) => [Math.round(value || 0) + ' mmHg', name]}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="bpSystolic"
-                  stroke="#ef4444"
-                  strokeWidth={2}
-                  dot={{ fill: '#ef4444', r: 3 }}
-                  name="Systolic"
-                  connectNulls
-                />
-                <Line
-                  type="monotone"
-                  dataKey="bpDiastolic"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ fill: '#3b82f6', r: 3 }}
-                  name="Diastolic"
-                  connectNulls
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          )}
-        </section>
+        {/* Body metrics — both sparse, only days logged */}
+        <div className="grid gap-6 sm:grid-cols-2">
+          {/* Weight */}
+          <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-100">
+              Weight
+            </h2>
+            <p className="mb-4 text-xs text-zinc-500">
+              {latestWeight ? (
+                <>
+                  Latest: {latestWeight.weightLbs} lbs
+                  {weightChange !== null && (
+                    <span className={weightChange < 0 ? 'text-green-600 dark:text-green-400' : 'text-zinc-500'}>
+                      {' · '}
+                      {weightChange > 0 ? '+' : ''}
+                      {Math.round(weightChange * 10) / 10} lbs over period
+                    </span>
+                  )}
+                </>
+              ) : (
+                'lbs · logged daily'
+              )}
+            </p>
+            {weightPoints.length === 0 ? (
+              <p className="py-8 text-center text-sm text-zinc-500">No weigh-ins in this period</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={150}>
+                <ComposedChart data={weightPoints} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
+                  <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={['auto', 'auto']} width={40} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
+                    labelFormatter={formatTooltipLabel}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    formatter={(value: any, name: any) => [value + ' lbs', name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '10px' }} />
+                  <Line type="monotone" dataKey="weightLbs" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 2 }} name="Weight" connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+          </section>
+
+          {/* Blood Pressure */}
+          <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-100">
+              Blood Pressure
+            </h2>
+            <p className="mb-4 text-xs text-zinc-500">mmHg · logged occasionally</p>
+            {chartData.filter((d) => d.bpSystolic != null || d.bpDiastolic != null).length === 0 ? (
+              <p className="py-8 text-center text-sm text-zinc-500">No readings in this period</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={150}>
+                <ComposedChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
+                  <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={['auto', 'auto']} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
+                    labelFormatter={formatTooltipLabel}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    formatter={(value: any, name: any) => [Math.round(value || 0) + ' mmHg', name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '10px' }} />
+                  <Line type="monotone" dataKey="bpSystolic" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} name="Systolic" connectNulls />
+                  <Line type="monotone" dataKey="bpDiastolic" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} name="Diastolic" connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+          </section>
+        </div>
 
         {/* Detailed Averages */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserId } from '@/lib/auth';
 import { supplementFiberBonus } from '@/lib/supplements';
+import { roundLbs } from '@/lib/units';
 
 function getSupabase() {
   return createClient(
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
   // Get supplement/alcohol checklist for each day
   const { data: checklists } = await supabase
     .from('daily_checklist')
-    .select('resolved_date, supplements_taken, alcohol, bp_systolic, bp_diastolic')
+    .select('resolved_date, supplements_taken, alcohol, weight_kg, bp_systolic, bp_diastolic')
     .eq('user_id', userId)
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr);
@@ -81,6 +82,14 @@ export async function GET(request: NextRequest) {
       bpMap[c.resolved_date] = { sys: c.bp_systolic ?? null, dia: c.bp_diastolic ?? null };
     }
   });
+
+  // Weight series. Kept separate from chartData because a weigh-in doesn't require
+  // logged food, and unlike calorie totals a morning weight is complete the moment
+  // it's entered — so today counts.
+  const weightData = (checklists ?? [])
+    .filter((c) => c.weight_kg != null)
+    .map((c) => ({ date: c.resolved_date, weightLbs: roundLbs(Number(c.weight_kg)) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   // Supplements taken per day, for folding psyllium's fiber into daily totals.
   const supplementsTakenByDate: Record<string, string[]> = {};
@@ -287,6 +296,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     chartData,
+    weightData,
     averages: {
       week: calculateAverages(last7Days),
       month: calculateAverages(last30Days),

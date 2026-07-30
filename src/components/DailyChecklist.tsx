@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { Supplement } from '@/types/database';
+import { lbsToKg, roundLbs } from '@/lib/units';
 
 export interface ChecklistData {
   supplements_taken: string[];
@@ -18,12 +19,7 @@ interface DailyChecklistProps {
   onChange: (checklist: ChecklistData) => void;
 }
 
-const KG_PER_LB = 0.45359237;
-const kgToLbs = (kg: number) => kg / KG_PER_LB;
-const lbsToKg = (lbs: number) => lbs * KG_PER_LB;
-// Weight is entered/displayed in lbs but stored in kg.
-const weightKgToInput = (kg: number | null) =>
-  kg === null ? '' : (Math.round(kgToLbs(kg) * 10) / 10).toString();
+const weightKgToInput = (kg: number | null) => (kg === null ? '' : roundLbs(kg).toString());
 
 export function DailyChecklist({ supplements, date, checklist, onChange }: DailyChecklistProps) {
   const [saving, setSaving] = useState(false);
