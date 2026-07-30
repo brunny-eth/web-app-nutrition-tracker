@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getUserId } from '@/lib/auth';
 import { supplementFiberBonus } from '@/lib/supplements';
 import { roundLbs } from '@/lib/units';
+import { DEFAULT_SATURATED_FAT_PERCENT, saturatedFatPercentOfCalories } from '@/lib/targets';
 
 function getSupabase() {
   return createClient(
@@ -208,6 +209,9 @@ export async function GET(request: NextRequest) {
       kNaRatio: data.sodium > 0 && data.potassium > 0
         ? data.potassium / data.sodium
         : null,
+      // Share of the day's consumed calories from saturated fat. Charted instead of
+      // grams so the limit is a flat line rather than one that steps with activity.
+      satFatPercent: saturatedFatPercentOfCalories(data.saturatedFat, data.calories),
       bpSystolic: bpMap[date]?.sys ?? null,
       bpDiastolic: bpMap[date]?.dia ?? null,
     }))
@@ -244,6 +248,16 @@ export async function GET(request: NextRequest) {
         ? Math.round(withProtein.reduce((sum, d) => sum + (d.proteinPercent || 0), 0) / withProtein.length)
         : null,
       avgSaturatedFat: Math.round(data.reduce((sum, d) => sum + d.saturatedFat, 0) / data.length),
+      // Aggregate ratio, not a mean of daily ratios — a 1200 kcal day shouldn't weigh
+      // as heavily as a 3000 kcal one when describing overall diet composition.
+      avgSatFatPercent: (() => {
+        const totalCalories = data.reduce((sum, d) => sum + d.calories, 0);
+        const pct = saturatedFatPercentOfCalories(
+          data.reduce((sum, d) => sum + d.saturatedFat, 0),
+          totalCalories
+        );
+        return pct === null ? null : Math.round(pct * 10) / 10;
+      })(),
       avgAddedSugar: Math.round(data.reduce((sum, d) => sum + d.addedSugar, 0) / data.length),
       avgSodium: Math.round(data.reduce((sum, d) => sum + d.sodium, 0) / data.length),
       avgPotassium: Math.round(data.reduce((sum, d) => sum + d.potassium, 0) / data.length),
@@ -257,13 +271,12 @@ export async function GET(request: NextRequest) {
 
   // Get recommendations for comparison
   const isMale = settings?.sex === 'male';
-  const targetCalories = bmr && settings?.calorie_deficit
-    ? Math.round(bmr * 1.55 - settings.calorie_deficit) // Use moderate activity for baseline
-    : 2000;
 
-  const satFatPercent = settings?.saturated_fat_percent ?? 7;
   const recommendations = {
-    saturatedFatLimit: Math.round((targetCalories * (satFatPercent / 100)) / 9),
+    // A percentage rather than a gram cap: grams would have to be derived from a
+    // single assumed activity level for the whole period, which contradicted the
+    // dashboard's per-day budget.
+    saturatedFatPercent: settings?.saturated_fat_percent ?? DEFAULT_SATURATED_FAT_PERCENT,
     addedSugarLimit: isMale ? 36 : 25,
     sodiumLimit: 2300,
     fiberTarget: isMale ? 38 : 25,

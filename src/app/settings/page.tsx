@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Supplement } from '@/types/database';
+import { DEFAULT_SATURATED_FAT_PERCENT } from '@/lib/targets';
 
 interface Settings {
   id: string;
@@ -66,7 +67,7 @@ export default function SettingsPage() {
       setAgeYears(s.age_years?.toString() || '');
       setSex(s.sex || '');
       setCalorieDeficit(s.calorie_deficit?.toString() || '500');
-      setSatFatPercent(s.saturated_fat_percent?.toString() || '7');
+      setSatFatPercent(s.saturated_fat_percent?.toString() || String(DEFAULT_SATURATED_FAT_PERCENT));
       setProteinGPerKg(s.protein_g_per_kg?.toString() || '1.8');
       setProteinFloor(s.protein_floor_g?.toString() || '150');
       setSupplements(s.supplements || []);
@@ -141,7 +142,7 @@ export default function SettingsPage() {
           age_years: ageYears ? parseInt(ageYears) : null,
           sex: sex || null,
           calorie_deficit: parseInt(calorieDeficit) || 500,
-          saturated_fat_percent: satFatPercent ? parseFloat(satFatPercent) : 7,
+          saturated_fat_percent: satFatPercent ? parseFloat(satFatPercent) : DEFAULT_SATURATED_FAT_PERCENT,
           protein_g_per_kg: proteinGPerKg ? parseFloat(proteinGPerKg) : 1.8,
           protein_floor_g: proteinFloor ? parseInt(proteinFloor) : 150,
           supplements: cleanedSupplements(),
@@ -318,10 +319,11 @@ export default function SettingsPage() {
                   value={satFatPercent}
                   onChange={(e) => setSatFatPercent(e.target.value)}
                   className="mt-1 block w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                  placeholder="7"
+                  placeholder={String(DEFAULT_SATURATED_FAT_PERCENT)}
                 />
                 <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  Daily saturated fat cap as a percentage of calories (e.g. 7%).
+                  Daily saturated fat cap as a percentage of calories. 10% is the dietary
+                  guideline ceiling; 6% is the stricter heart-health target.
                 </p>
               </div>
 

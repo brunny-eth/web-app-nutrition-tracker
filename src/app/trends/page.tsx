@@ -24,6 +24,7 @@ interface ChartDataPoint {
   carbs: number;
   fat: number;
   saturatedFat: number;
+  satFatPercent: number | null;
   fiber: number;
   addedSugar: number;
   sodium: number;
@@ -49,6 +50,7 @@ interface Averages {
   avgDeficit: number | null;
   avgProteinPercent: number | null;
   avgSaturatedFat: number;
+  avgSatFatPercent: number | null;
   avgAddedSugar: number;
   avgSodium: number;
   avgPotassium: number;
@@ -83,7 +85,7 @@ interface TrendsData {
     month: Adherence | null;
   };
   recommendations: {
-    saturatedFatLimit: number;
+    saturatedFatPercent: number;
     addedSugarLimit: number;
     sodiumLimit: number;
     fiberTarget: number;
@@ -372,24 +374,29 @@ export default function TrendsPage() {
             <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-100">
               Saturated Fat
             </h2>
-            <p className="mb-4 text-xs text-zinc-500">Limit: &lt;{recommendations.saturatedFatLimit}g/day</p>
+            <p className="mb-4 text-xs text-zinc-500">
+              Limit: &lt;{recommendations.saturatedFatPercent}% of calories consumed
+            </p>
             {chartData.length === 0 ? (
               <p className="py-8 text-center text-zinc-500 text-sm">No data</p>
             ) : (
               <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={chartData.map(d => ({ ...d, satFatLimit: recommendations.saturatedFatLimit }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <ComposedChart data={chartData.map(d => ({ ...d, satFatLimitPct: recommendations.saturatedFatPercent }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={[0, 'auto']} unit="%" />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                     labelFormatter={formatTooltipLabel}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(value: any, name: any) => [Math.round(value || 0) + 'g', name]}
+                    formatter={(value: any, name: any) => [
+                      value == null ? '—' : (value as number).toFixed(1) + '%',
+                      name,
+                    ]}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
-                  <Line type="monotone" dataKey="satFatLimit" stroke="#7f1d1d" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Limit" connectNulls />
-                  <Line type="monotone" dataKey="saturatedFat" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} name="Consumed" connectNulls />
+                  <Line type="monotone" dataKey="satFatLimitPct" stroke="#7f1d1d" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Limit" connectNulls />
+                  <Line type="monotone" dataKey="satFatPercent" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} name="% of calories" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -625,7 +632,17 @@ export default function TrendsPage() {
                   <td className="py-2 text-zinc-700 dark:text-zinc-300">Sat. Fat</td>
                   <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgSaturatedFat ?? '—'}g</td>
                   <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgSaturatedFat ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-500">&lt;{recommendations.saturatedFatLimit}g</td>
+                  <td className="py-2 text-right text-zinc-500">—</td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Sat. Fat (% of cals)</td>
+                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
+                    {averages.week?.avgSatFatPercent != null ? averages.week.avgSatFatPercent + '%' : '—'}
+                  </td>
+                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
+                    {averages.month?.avgSatFatPercent != null ? averages.month.avgSatFatPercent + '%' : '—'}
+                  </td>
+                  <td className="py-2 text-right text-zinc-500">&lt;{recommendations.saturatedFatPercent}%</td>
                 </tr>
                 <tr>
                   <td className="py-2 text-zinc-700 dark:text-zinc-300">Added Sugar</td>

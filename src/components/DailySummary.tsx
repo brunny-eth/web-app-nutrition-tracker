@@ -1,5 +1,7 @@
 'use client';
 
+import { DEFAULT_SATURATED_FAT_PERCENT, saturatedFatLimitGrams } from '@/lib/targets';
+
 interface NutrientValue {
   value: number;
   low: number;
@@ -26,12 +28,12 @@ interface DailySummaryProps {
 function getRecommendations(targetCalories?: number, sex?: 'male' | 'female' | null, satFatPercent?: number) {
   const cals = targetCalories || 2000;
   const isMale = sex === 'male';
-  const satPct = satFatPercent ?? 10;
+  const satPct = satFatPercent ?? DEFAULT_SATURATED_FAT_PERCENT;
 
   return {
     // Saturated fat: configurable % of daily calories (9 cal/g of fat)
     saturatedFat: {
-      limit: Math.round((cals * (satPct / 100)) / 9),
+      limit: saturatedFatLimitGrams(cals, satPct),
       type: 'limit' as const,
       tip: `<${satPct}% of calories`,
     },
