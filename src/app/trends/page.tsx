@@ -149,6 +149,8 @@ export default function TrendsPage() {
   const latestWeight = weightPoints.at(-1) ?? null;
   const weightChange =
     weightPoints.length >= 2 ? weightPoints[weightPoints.length - 1].weightLbs - weightPoints[0].weightLbs : null;
+  const weightSeries = withTrailingAverage(weightPoints);
+  const weightDomain = paddedDomain(weightSeries.flatMap((p) => [p.weightLbs, p.avg7]));
   const monthAdh = adherence.month;
   const weekAdh = adherence.week;
 
@@ -508,11 +510,16 @@ export default function TrendsPage() {
             {weightPoints.length === 0 ? (
               <p className="py-8 text-center text-sm text-zinc-500">No weigh-ins in this period</p>
             ) : (
-              <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={weightPoints} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+              <ResponsiveContainer width="100%" height={170}>
+                <ComposedChart data={weightSeries} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={['auto', 'auto']} width={40} />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#71717a' }}
+                    domain={weightDomain}
+                    allowDecimals={false}
+                    width={34}
+                  />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                     labelFormatter={formatTooltipLabel}
@@ -520,7 +527,8 @@ export default function TrendsPage() {
                     formatter={(value: any, name: any) => [value + ' lbs', name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
-                  <Line type="monotone" dataKey="weightLbs" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 2 }} name="Weight" connectNulls />
+                  <Line type="monotone" dataKey="weightLbs" stroke="#7dd3fc" strokeWidth={1.5} dot={{ r: 2 }} name="Daily" connectNulls />
+                  <Line type="monotone" dataKey="avg7" stroke="#0284c7" strokeWidth={2.5} dot={false} name="7-day avg" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -712,6 +720,45 @@ export default function TrendsPage() {
       </main>
     </div>
   );
+}
+
+const DAY_MS = 86_400_000;
+const dateMs = (d: string) => new Date(d + 'T12:00:00').getTime();
+
+/**
+ * 7-day trailing average, windowed by calendar date rather than by the previous
+ * 7 logged points — so a gap in weigh-ins widens the gap instead of silently
+ * averaging in readings from two weeks back.
+ */
+function withTrailingAverage(points: WeightPoint[]): (WeightPoint & { avg7: number })[] {
+  return points.map((p, i) => {
+    const cutoff = dateMs(p.date) - 6 * DAY_MS;
+    const window = points.slice(0, i + 1).filter((w) => dateMs(w.date) >= cutoff);
+    return {
+      ...p,
+      avg7: Math.round((window.reduce((sum, w) => sum + w.weightLbs, 0) / window.length) * 10) / 10,
+    };
+  });
+}
+
+/**
+ * Weight varies by a couple of pounds day to day, so an auto-fit axis turns
+ * water weight into a mountain range. Hold the axis to at least a 10 lb window
+ * centered on the data so the shape reflects real change.
+ */
+const MIN_WEIGHT_SPAN_LBS = 10;
+
+function paddedDomain(values: number[]): [number, number] {
+  if (values.length === 0) return [0, MIN_WEIGHT_SPAN_LBS];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(max - min, 0);
+  if (span >= MIN_WEIGHT_SPAN_LBS) {
+    const pad = span * 0.1;
+    return [Math.floor(min - pad), Math.ceil(max + pad)];
+  }
+  const mid = (min + max) / 2;
+  return [Math.floor(mid - MIN_WEIGHT_SPAN_LBS / 2), Math.ceil(mid + MIN_WEIGHT_SPAN_LBS / 2)];
 }
 
 function AdherenceCell({ pct, taken, days }: { pct: number | null; taken?: number; days?: number }) {
