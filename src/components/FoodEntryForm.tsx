@@ -8,6 +8,32 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
 }
 
+/**
+ * A recent meal, split into what the dropdown shows and what gets inserted.
+ * A day logged as one long multi-line message makes a useless label, so the two
+ * can't be the same string.
+ */
+interface RecentMeal {
+  /** One line, length-capped, for the dropdown row. */
+  label: string;
+  /** The original text, inserted verbatim when picked. */
+  text: string;
+}
+
+const RECENT_LABEL_MAX_CHARS = 80;
+
+/**
+ * Collapse newlines and cap the length. Row height is then bounded by the data
+ * rather than by CSS line clamping, which was sizing each row to the height of the
+ * full untruncated text and leaving tall blank gaps under long entries.
+ */
+function toRecentLabel(rawText: string): string {
+  const oneLine = rawText.replace(/\s+/g, ' ').trim();
+  return oneLine.length > RECENT_LABEL_MAX_CHARS
+    ? `${oneLine.slice(0, RECENT_LABEL_MAX_CHARS).trimEnd()}…`
+    : oneLine;
+}
+
 interface FoodEntryFormProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
@@ -30,7 +56,7 @@ export function FoodEntryForm({
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
-  const [recentMeals, setRecentMeals] = useState<string[]>([]);
+  const [recentMeals, setRecentMeals] = useState<RecentMeal[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,15 +84,18 @@ export function FoodEntryForm({
       const res = await fetch(`/api/entries?from=${fromStr}&to=${today}`);
       const data = await res.json();
       const seen = new Set<string>();
-      const unique: string[] = [];
+      const unique: RecentMeal[] = [];
       // Matches IMAGE_ONLY_TEXT plus the "2 servings" variants older rows may carry —
       // those describe a photo, not a meal, so they're useless as suggestions.
       const imageOnlyPattern = /^\d*\.?\d*\s*servings?$/i;
       for (const entry of (data.entries || [])) {
-        const text = entry.raw_text.trim();
-        if (!seen.has(text) && !imageOnlyPattern.test(text)) {
-          seen.add(text);
-          unique.push(text);
+        const text = (entry.raw_text ?? '').trim();
+        const label = toRecentLabel(text);
+        // Dedupe on the label so two logs differing only in line breaks collapse
+        // into one suggestion. Skips blanks, which used to render as empty rows.
+        if (label && !seen.has(label) && !imageOnlyPattern.test(label)) {
+          seen.add(label);
+          unique.push({ label, text });
         }
         if (unique.length >= 8) break;
       }
@@ -325,10 +354,11 @@ export function FoodEntryForm({
                     <li key={i}>
                       <button
                         type="button"
-                        onClick={() => handleSelectRecent(meal)}
-                        className="w-full px-4 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        onClick={() => handleSelectRecent(meal.text)}
+                        title={meal.text}
+                        className="block w-full px-4 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                       >
-                        <span className="line-clamp-2">{meal}</span>
+                        {meal.label}
                       </button>
                     </li>
                   ))}
