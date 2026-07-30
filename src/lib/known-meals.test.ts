@@ -1,32 +1,34 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
+import { MEAL_EVAL_CASES, relativeError, sumMetric, type MealMetric } from './meal-eval-cases';
 
-// Load environment variables from .env.local
+// Must run before ./openai is loaded — it reads ANTHROPIC_API_KEY at module scope,
+// and static imports are hoisted above this call. Hence the dynamic import below.
 config({ path: '.env.local' });
 
 /**
- * Known Meals Regression Tests
- * 
- * These tests call the real OpenAI API to verify that common meals
- * are parsed within expected ranges. Results should be within 10%
- * of expected values.
- * 
- * Note: These tests require OPENAI_API_KEY to be set in .env.local
- * Run with: npm test
+ * Known Meals Regression
+ *
+ * Calls the real Anthropic API to check that common meals parse within their
+ * per-case tolerance. This is a coarse gate — it catches "the parser broke", not
+ * "the parser got slightly worse". For measuring accuracy, comparing models, or
+ * testing prompt changes, use the scored harness instead:
+ *
+ *   npm run eval
+ *   npm run eval -- --model=claude-opus-5
+ *   npm run eval -- --thinking=adaptive
+ *
+ * Requires ANTHROPIC_API_KEY in .env.local; skipped entirely without it.
  */
 
-const TOLERANCE = 0.10; // 10% tolerance
+// Generous, because these are live API calls running concurrently. The per-test
+// value overrides vitest.config.ts's testTimeout — which is how every case in
+// here used to cap at 15s despite the config saying 30s.
+const API_TIMEOUT = 60_000;
 
-function withinTolerance(actual: number, expected: number): boolean {
-  const min = expected * (1 - TOLERANCE);
-  const max = expected * (1 + TOLERANCE);
-  return actual >= min && actual <= max;
-}
+const hasApiKey =
+  process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key_here';
 
-// Check if API key is available
-const hasApiKey = process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key_here';
-
-// Conditionally run or skip the describe block
 const describeIfApiKey = hasApiKey ? describe : describe.skip;
 
 describeIfApiKey('Known Meals Regression (requires ANTHROPIC_API_KEY)', () => {
@@ -34,171 +36,94 @@ describeIfApiKey('Known Meals Regression (requires ANTHROPIC_API_KEY)', () => {
   let parseMealDescription: typeof import('./openai').parseMealDescription;
 
   beforeAll(async () => {
-    const module = await import('./openai');
-    parseMealDescription = module.parseMealDescription;
+    ({ parseMealDescription } = await import('./openai'));
   });
 
-  describe('Single items', () => {
-    it('should parse "1 large egg" correctly', async () => {
-      const result = await parseMealDescription('1 large egg', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      const egg = result.items[0];
-      // Expected: 70-90 calories, 5-8g protein (USDA: 72cal, 6.3g protein)
-      expect(egg.calories).toBeGreaterThanOrEqual(65);
-      expect(egg.calories).toBeLessThanOrEqual(100);
-      expect(egg.protein_g).toBeGreaterThanOrEqual(5);
-      expect(egg.protein_g).toBeLessThanOrEqual(8);
-    }, 15000);
+  describe.concurrent('Reference meals', () => {
+    for (const c of MEAL_EVAL_CASES) {
+      const pct = Math.round(c.tolerance * 100);
+      it(
+        `parses "${c.name}" within ${pct}%`,
+        async () => {
+          const result = await parseMealDescription(c.input, today);
+          expect(result.items.length).toBeGreaterThanOrEqual(1);
 
-    it('should parse "1 cup of cooked white rice" correctly', async () => {
-      const result = await parseMealDescription('1 cup of cooked white rice', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      const rice = result.items[0];
-      // Expected: ~200-240 calories, ~4-5g protein, ~45g carbs
-      expect(withinTolerance(rice.calories, 205)).toBe(true);
-      expect(withinTolerance(rice.carbs_g, 45)).toBe(true);
-    }, 15000);
-
-    it('should parse "1 scoop whey protein with water" correctly', async () => {
-      const result = await parseMealDescription('1 scoop whey protein with water', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      const totalProtein = result.items.reduce((sum, item) => sum + item.protein_g, 0);
-      const totalCalories = result.items.reduce((sum, item) => sum + item.calories, 0);
-      
-      // Expected: ~100-130 calories, ~20-30g protein
-      expect(totalCalories).toBeGreaterThanOrEqual(90);
-      expect(totalCalories).toBeLessThanOrEqual(150);
-      expect(totalProtein).toBeGreaterThanOrEqual(18);
-      expect(totalProtein).toBeLessThanOrEqual(35);
-    }, 15000);
-
-    it('should parse "1 medium banana" correctly', async () => {
-      const result = await parseMealDescription('1 medium banana', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      const banana = result.items[0];
-      // Expected: ~100-110 calories, ~1g protein, ~25-30g carbs
-      expect(withinTolerance(banana.calories, 105)).toBe(true);
-      expect(withinTolerance(banana.carbs_g, 27)).toBe(true);
-    }, 15000);
-
-    it('should parse "chicken breast 6oz grilled" correctly', async () => {
-      const result = await parseMealDescription('chicken breast 6oz grilled', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      const chicken = result.items[0];
-      // Expected: ~280-320 calories, ~50-55g protein
-      expect(withinTolerance(chicken.calories, 280)).toBe(true);
-      expect(withinTolerance(chicken.protein_g, 52)).toBe(true);
-    }, 15000);
-  });
-
-  describe('Composite meals', () => {
-    it('should parse "rice bowl with ground beef and vegetables" correctly', async () => {
-      const result = await parseMealDescription('rice bowl with ground beef (about 4oz) and mixed vegetables', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      const totalCalories = result.items.reduce((sum, item) => sum + item.calories, 0);
-      const totalProtein = result.items.reduce((sum, item) => sum + item.protein_g, 0);
-      
-      // Expected total: ~500-700 calories, ~25-40g protein
-      expect(totalCalories).toBeGreaterThanOrEqual(400);
-      expect(totalCalories).toBeLessThanOrEqual(800);
-      expect(totalProtein).toBeGreaterThanOrEqual(20);
-      expect(totalProtein).toBeLessThanOrEqual(50);
-    }, 20000);
-
-    it('should parse "Starbucks spinach feta wrap" correctly', async () => {
-      const result = await parseMealDescription('Starbucks spinach feta egg white wrap', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      const totalCalories = result.items.reduce((sum, item) => sum + item.calories, 0);
-      const totalProtein = result.items.reduce((sum, item) => sum + item.protein_g, 0);
-      
-      // Known Starbucks item: 290 calories, 19g protein
-      expect(withinTolerance(totalCalories, 290)).toBe(true);
-      expect(withinTolerance(totalProtein, 19)).toBe(true);
-    }, 15000);
-
-    it('should parse "oatmeal with peanut butter and banana" correctly', async () => {
-      const result = await parseMealDescription('1 cup oatmeal with 2 tbsp peanut butter and half a banana', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      const totalCalories = result.items.reduce((sum, item) => sum + item.calories, 0);
-      const totalProtein = result.items.reduce((sum, item) => sum + item.protein_g, 0);
-      
-      // Expected total: ~450-550 calories, ~15-20g protein
-      expect(totalCalories).toBeGreaterThanOrEqual(380);
-      expect(totalCalories).toBeLessThanOrEqual(600);
-      expect(totalProtein).toBeGreaterThanOrEqual(12);
-      expect(totalProtein).toBeLessThanOrEqual(25);
-    }, 15000);
-  });
-
-  describe('Date extraction', () => {
-    it('should NOT extract date from "leftover from yesterday"', async () => {
-      const result = await parseMealDescription('eating leftover pizza from yesterday', today);
-      
-      // Should NOT extract an explicit date - this is describing food origin
-      expect(result.explicit_date).toBeNull();
-    }, 15000);
-
-    it('should extract date from "I had pizza yesterday"', async () => {
-      const result = await parseMealDescription('I had a slice of pizza yesterday', today);
-      
-      // Should extract yesterday's date
-      expect(result.explicit_date).toBe('2026-01-28');
-    }, 15000);
-
-    it('should NOT extract date when none mentioned', async () => {
-      const result = await parseMealDescription('grilled chicken with rice', today);
-      
-      expect(result.explicit_date).toBeNull();
-    }, 15000);
-  });
-
-  describe('Assumptions tracking', () => {
-    it('should include assumptions for ambiguous portions', async () => {
-      const result = await parseMealDescription('some chicken with rice', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      // At least one item should have assumptions
-      const hasAssumptions = result.items.some(
-        item => item.assumptions && item.assumptions.length > 0
+          for (const [metric, expected] of Object.entries(c.expected) as Array<
+            [MealMetric, number]
+          >) {
+            const actual = sumMetric(result.items, metric);
+            const error = Math.abs(relativeError(actual, expected));
+            // Surfaced in the failure message so a regression shows by how much.
+            expect(
+              error,
+              `${c.name} ${metric}: got ${actual.toFixed(1)}, expected ~${expected} ` +
+                `(${(error * 100).toFixed(0)}% off, tolerance ${pct}%)`
+            ).toBeLessThanOrEqual(c.tolerance);
+          }
+        },
+        API_TIMEOUT
       );
-      expect(hasAssumptions).toBe(true);
-    }, 15000);
+    }
+  });
 
-    it('should include cooking oil assumptions when not specified', async () => {
-      const result = await parseMealDescription('fried eggs', today);
-      
-      expect(result.items.length).toBeGreaterThanOrEqual(1);
-      
-      // Should either have oil as separate item or assumption about oil
-      const totalFat = result.items.reduce((sum, item) => sum + item.fat_g, 0);
-      // Fried eggs should have more fat than plain eggs due to oil
-      expect(totalFat).toBeGreaterThan(8);
-    }, 15000);
+  describe.concurrent('Date extraction', () => {
+    it(
+      'does not extract a date from "leftover from yesterday" (describes origin, not when eaten)',
+      async () => {
+        const result = await parseMealDescription('eating leftover pizza from yesterday', today);
+        expect(result.explicit_date).toBeNull();
+      },
+      API_TIMEOUT
+    );
+
+    it(
+      'extracts the date from "I had pizza yesterday"',
+      async () => {
+        const result = await parseMealDescription('I had a slice of pizza yesterday', today);
+        expect(result.explicit_date).toBe('2026-01-28');
+      },
+      API_TIMEOUT
+    );
+
+    it(
+      'returns null when no date is mentioned',
+      async () => {
+        const result = await parseMealDescription('grilled chicken with rice', today);
+        expect(result.explicit_date).toBeNull();
+      },
+      API_TIMEOUT
+    );
+  });
+
+  describe.concurrent('Assumptions tracking', () => {
+    it(
+      'records assumptions for an ambiguous portion',
+      async () => {
+        const result = await parseMealDescription('some chicken with rice', today);
+        expect(result.items.length).toBeGreaterThanOrEqual(1);
+        expect(result.items.some((item) => item.assumptions && item.assumptions.length > 0)).toBe(
+          true
+        );
+      },
+      API_TIMEOUT
+    );
+
+    it(
+      'accounts for cooking fat when it is not specified',
+      async () => {
+        const result = await parseMealDescription('fried eggs', today);
+        const totalFat = sumMetric(result.items, 'fat_g');
+        // Plain eggs are ~10g fat for two; frying should push this higher.
+        expect(totalFat).toBeGreaterThan(8);
+      },
+      API_TIMEOUT
+    );
   });
 });
 
-// If no API key, show a message
 if (!hasApiKey) {
   describe('Known Meals Regression', () => {
-    it('SKIPPED - Set ANTHROPIC_API_KEY in .env.local to run these tests', () => {
-      console.log('⚠️  Known meals tests skipped - no API key');
+    it('SKIPPED - set ANTHROPIC_API_KEY in .env.local to run these tests', () => {
       expect(true).toBe(true);
     });
   });

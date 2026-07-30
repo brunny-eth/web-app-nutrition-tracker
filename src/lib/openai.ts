@@ -6,6 +6,23 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+/**
+ * Overridable so the eval harness can sweep models without editing source.
+ * Sonnet 5 is the same price tier as the Sonnet 4.6 this replaced.
+ */
+export const MEAL_MODEL = process.env.MEAL_PARSER_MODEL ?? 'claude-sonnet-5';
+
+/**
+ * Sonnet 5 runs adaptive thinking when `thinking` is omitted, where Sonnet 4.6 ran
+ * without it. Left implicit, that would spend part of max_tokens on thinking and
+ * slow every food log down. Off by default to keep parsing fast; overridable so
+ * `npm run eval -- --thinking=adaptive` can measure whether it buys any accuracy.
+ */
+const THINKING =
+  process.env.MEAL_PARSER_THINKING === 'adaptive'
+    ? ({ type: 'adaptive' } as const)
+    : ({ type: 'disabled' } as const);
+
 const SYSTEM_PROMPT = `You are a nutrition analysis assistant. Your job is to parse meal descriptions (text and/or images) and return structured nutritional data.
 
 RULES:
@@ -132,8 +149,9 @@ export async function parseMealDescription(
   userContent.push({ type: 'text', text: textPrompt });
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: MEAL_MODEL,
     max_tokens: 8192,
+    thinking: THINKING,
     system: [{
       type: 'text',
       text: SYSTEM_PROMPT,
@@ -143,6 +161,9 @@ export async function parseMealDescription(
     tools: [{
       name: 'parse_meal',
       description: 'Parse meal description and return structured nutritional data',
+      // ParsedMealSchema already emits additionalProperties:false, every property
+      // required, and no numeric constraints — so it satisfies strict mode as-is.
+      strict: true,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       input_schema: z.toJSONSchema(ParsedMealSchema) as any,
     }],
@@ -244,8 +265,9 @@ EXAMPLES:
 
 export async function estimateActivityMultiplier(description: string): Promise<ActivityEstimate> {
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: MEAL_MODEL,
     max_tokens: 1024,
+    thinking: THINKING,
     system: ACTIVITY_SYSTEM_PROMPT,
     messages: [
       { role: 'user', content: `Estimate the activity multiplier for this day:\n\n"${description}"` },
@@ -253,6 +275,7 @@ export async function estimateActivityMultiplier(description: string): Promise<A
     tools: [{
       name: 'estimate_activity',
       description: 'Estimate Harris-Benedict activity multiplier from activity description',
+      strict: true,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       input_schema: z.toJSONSchema(ActivityEstimateSchema) as any,
     }],
