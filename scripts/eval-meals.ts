@@ -32,7 +32,7 @@ const concurrency = Math.max(1, Number(flag('concurrency') ?? 4));
 if (modelOverride) process.env.MEAL_PARSER_MODEL = modelOverride;
 if (thinkingOverride) process.env.MEAL_PARSER_THINKING = thinkingOverride;
 
-const { parseMealDescription, MEAL_MODEL } = await import('../src/lib/openai');
+const { parseMealDescription, MEAL_MODEL } = await import('../src/lib/nutrition-ai');
 
 const TODAY = '2026-01-29';
 

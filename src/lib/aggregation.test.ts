@@ -1,46 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-/**
- * Aggregation helper - mirrors what the frontend does
- */
-function aggregateItems(items: Array<{
-  calories: number;
-  calories_low: number;
-  calories_high: number;
-  protein_g: number;
-  protein_low: number;
-  protein_high: number;
-  carbs_g: number;
-  carbs_low: number;
-  carbs_high: number;
-  fat_g: number;
-  fat_low: number;
-  fat_high: number;
-}>) {
-  return items.reduce(
-    (acc, item) => {
-      acc.calories.value += item.calories;
-      acc.calories.low += item.calories_low;
-      acc.calories.high += item.calories_high;
-      acc.protein.value += item.protein_g;
-      acc.protein.low += item.protein_low;
-      acc.protein.high += item.protein_high;
-      acc.carbs.value += item.carbs_g;
-      acc.carbs.low += item.carbs_low;
-      acc.carbs.high += item.carbs_high;
-      acc.fat.value += item.fat_g;
-      acc.fat.low += item.fat_low;
-      acc.fat.high += item.fat_high;
-      return acc;
-    },
-    {
-      calories: { value: 0, low: 0, high: 0 },
-      protein: { value: 0, low: 0, high: 0 },
-      carbs: { value: 0, low: 0, high: 0 },
-      fat: { value: 0, low: 0, high: 0 },
-    }
-  );
-}
+import { aggregateItems } from './aggregation';
 
 describe('Aggregation Math', () => {
   describe('Basic summation', () => {

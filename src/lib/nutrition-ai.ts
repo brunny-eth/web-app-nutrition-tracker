@@ -1,6 +1,25 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { ParsedMealSchema, type ParsedMeal, ActivityEstimateSchema, type ActivityEstimate } from '@/types/nutrition';
+import {
+  ParsedMealSchema,
+  type ParsedMeal,
+  ActivityEstimateSchema,
+  type ActivityEstimate,
+  type FoodItem,
+  IMAGE_ONLY_TEXT,
+} from '@/types/nutrition';
+
+/**
+ * The input can't be turned into nutrition data — a photo of a plate rather than a
+ * label, or a description with no recognizable food. The user's problem to fix, so
+ * callers should surface the message and return 400 rather than 500.
+ */
+export class MealRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MealRejectedError';
+  }
+}
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -49,7 +68,7 @@ ESTIMATION GUIDELINES:
 NUTRITIONAL DATA:
 - Use standard USDA values as baseline
 - Adjust for preparation method (fried adds fat, etc.)
-- saturated_fat + unsaturated_fat should approximately equal total fat
+- saturated_fat must never exceed total fat
 - Account for cooking oils or butter as appropriate to the meal unless "no oil" or "dry cooked" is specified
 - ADDED SUGAR: Only count sugars added during processing/cooking, NOT natural sugars from:
   - Whole fruits (an apple has 0g added sugar)
@@ -62,7 +81,7 @@ IMAGE HANDLING:
 - If an image is attached, analyze it for nutritional information
 - VALID images: nutrition facts labels, menus with nutritional info, food packaging
 - INVALID images: photos of actual food/meals (we cannot estimate nutrition from food photos)
-- If image shows actual food (not a label), add to assumptions: "ERROR: Cannot analyze photos of food. Please photograph nutrition labels or menus instead."
+- If the image shows actual food rather than a label, return an empty items list and set rejection_reason to: "Cannot analyze photos of food. Please photograph nutrition labels or menus instead."
 - For valid images: extract the nutrition facts shown and apply any quantity mentioned in the text (e.g., "2 bags" = multiply by 2)
 - Combine image data with any other foods mentioned in the text
 
@@ -138,7 +157,7 @@ export async function parseMealDescription(
   // Build text prompt
   let textPrompt = `Today's date is ${todayDate}.\n\n`;
 
-  if (imageBase64 && mealText && mealText !== '1 serving') {
+  if (imageBase64 && mealText && mealText !== IMAGE_ONLY_TEXT) {
     textPrompt += `Parse this meal. The image shows a nutrition label/menu. The user's description is: "${mealText}"\n\nExtract nutrition from the image AND parse any other foods mentioned in the text.`;
   } else if (imageBase64) {
     textPrompt += `Extract nutritional data from this image. Assume 1 serving unless otherwise indicated.`;
@@ -180,62 +199,19 @@ export async function parseMealDescription(
 
   const parsed = ParsedMealSchema.parse(toolUse.input);
 
-  // Check for image validation error in assumptions
-  for (const item of parsed.items) {
-    if (item.assumptions?.some(a => a.includes('ERROR:'))) {
-      const errorMsg = item.assumptions.find(a => a.includes('ERROR:'));
-      throw new Error(errorMsg?.replace('ERROR: ', '') || 'Image validation failed');
-    }
+  if (parsed.rejection_reason) {
+    throw new MealRejectedError(parsed.rejection_reason);
+  }
+
+  // An empty list used to sail through and create an entry with no items, which
+  // then counted as a tracked day with zero calories.
+  if (parsed.items.length === 0) {
+    throw new MealRejectedError(
+      "Couldn't identify any food in that. Try adding more detail."
+    );
   }
 
   return parsed;
-}
-
-/**
- * Validate that the response has reasonable values
- */
-export function validateParsedMeal(meal: ParsedMeal): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  for (const item of meal.items) {
-    // Check that low <= value <= high for all ranges
-    if (item.calories_low > item.calories || item.calories > item.calories_high) {
-      errors.push(`${item.food_name}: calories range invalid`);
-    }
-    if (item.protein_low > item.protein_g || item.protein_g > item.protein_high) {
-      errors.push(`${item.food_name}: protein range invalid`);
-    }
-    if (item.carbs_low > item.carbs_g || item.carbs_g > item.carbs_high) {
-      errors.push(`${item.food_name}: carbs range invalid`);
-    }
-    if (item.fat_low > item.fat_g || item.fat_g > item.fat_high) {
-      errors.push(`${item.food_name}: fat range invalid`);
-    }
-
-    // Check that saturated + unsaturated ≈ total fat (within 20% tolerance)
-    const fatSum = item.saturated_fat_g + item.unsaturated_fat_g;
-    const fatDiff = Math.abs(fatSum - item.fat_g);
-    if (fatDiff > item.fat_g * 0.2 && item.fat_g > 1) {
-      errors.push(`${item.food_name}: fat breakdown doesn't match total (${fatSum.toFixed(1)} vs ${item.fat_g.toFixed(1)})`);
-    }
-
-    // Check for negative values
-    const numericFields = [
-      'calories', 'protein_g', 'carbs_g', 'fat_g',
-      'saturated_fat_g', 'unsaturated_fat_g', 'fiber_g', 'sodium_mg', 'added_sugar_g', 'potassium_mg'
-    ] as const;
-
-    for (const field of numericFields) {
-      if (item[field] < 0) {
-        errors.push(`${item.food_name}: ${field} is negative`);
-      }
-    }
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
 }
 
 const ACTIVITY_SYSTEM_PROMPT = `You are an activity level estimation assistant. Your job is to estimate a Harris-Benedict activity multiplier from a natural language description of someone's daily activity.

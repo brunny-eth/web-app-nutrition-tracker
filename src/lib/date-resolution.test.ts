@@ -166,3 +166,25 @@ describe('Date Resolution', () => {
     });
   });
 });
+
+describe('Explicit date bounds', () => {
+  // The LLM's date used to be format-checked only, so a misread relative date could
+  // file food outside any range the UI shows.
+  it('ignores an explicit date far in the past and falls back to the timestamp', () => {
+    const result = resolveDate('1970-01-01', '2026-01-29T15:00:00Z', 'America/New_York');
+    expect(result.resolved_date).toBe('2026-01-29');
+    expect(result.explicit_date_in_text).toBe(false);
+  });
+
+  it('ignores an explicit date in the future', () => {
+    const result = resolveDate('2099-12-31', '2026-01-29T15:00:00Z', 'America/New_York');
+    expect(result.resolved_date).toBe('2026-01-29');
+    expect(result.explicit_date_in_text).toBe(false);
+  });
+
+  it('still accepts a date within the past year', () => {
+    const result = resolveDate('2025-06-15', '2026-01-29T15:00:00Z', 'America/New_York');
+    expect(result.resolved_date).toBe('2025-06-15');
+    expect(result.explicit_date_in_text).toBe(true);
+  });
+});

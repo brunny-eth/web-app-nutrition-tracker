@@ -1,42 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-/**
- * Validation rules for nutrition values
- */
-function validateNutritionUpdate(values: {
-  calories?: number;
-  protein_g?: number;
-  carbs_g?: number;
-  fat_g?: number;
-  grams?: number | null;
-}): { valid: boolean; error?: string } {
-  if (values.calories !== undefined) {
-    if (values.calories < 0) {
-      return { valid: false, error: 'Calories cannot be negative' };
-    }
-    if (values.calories < 5) {
-      return { valid: false, error: 'Calories must be at least 5' };
-    }
-  }
-
-  if (values.protein_g !== undefined && values.protein_g < 0) {
-    return { valid: false, error: 'Protein cannot be negative' };
-  }
-
-  if (values.carbs_g !== undefined && values.carbs_g < 0) {
-    return { valid: false, error: 'Carbs cannot be negative' };
-  }
-
-  if (values.fat_g !== undefined && values.fat_g < 0) {
-    return { valid: false, error: 'Fat cannot be negative' };
-  }
-
-  if (values.grams !== undefined && values.grams !== null && values.grams < 0) {
-    return { valid: false, error: 'Grams cannot be negative' };
-  }
-
-  return { valid: true };
-}
+import { validateNutritionUpdate } from './validation';
 
 describe('Validation', () => {
   describe('Calories validation', () => {

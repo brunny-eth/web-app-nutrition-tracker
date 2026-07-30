@@ -14,6 +14,16 @@ import { toZonedTime, format as formatTz } from 'date-fns-tz';
 const DEFAULT_TIMEZONE = 'America/New_York';
 
 /**
+ * How far back an LLM-extracted date may reach. Bounded because `explicit_date`
+ * was only format-checked, so a misread relative date ("a year ago Tuesday") could
+ * file food in 1970 or in the future, where it silently never appears in trends.
+ * Measured against the submission timestamp rather than the wall clock so the
+ * function stays deterministic.
+ */
+const MAX_BACKDATE_DAYS = 365;
+const DAY_MS = 86_400_000;
+
+/**
  * Resolves the date for a food entry
  * @param explicitDate - Date extracted from text by LLM (YYYY-MM-DD format), or null
  * @param clientTimestamp - The timestamp when the entry was submitted (ISO string or Date)
@@ -25,19 +35,29 @@ export function resolveDate(
   clientTimestamp: string | Date,
   userTimezone: string = DEFAULT_TIMEZONE
 ): { resolved_date: string; explicit_date_in_text: boolean } {
-  // Priority 1: Explicit date from text
+  const timestamp = typeof clientTimestamp === 'string'
+    ? new Date(clientTimestamp)
+    : clientTimestamp;
+
+  // Priority 1: Explicit date from text, if it's plausible
   if (explicitDate && isValidDateString(explicitDate)) {
-    return {
-      resolved_date: explicitDate,
-      explicit_date_in_text: true,
-    };
+    const explicitMs = new Date(explicitDate + 'T12:00:00Z').getTime();
+    const submittedMs = timestamp.getTime();
+    const withinRange =
+      explicitMs <= submittedMs + DAY_MS &&
+      explicitMs >= submittedMs - MAX_BACKDATE_DAYS * DAY_MS;
+
+    if (withinRange) {
+      return {
+        resolved_date: explicitDate,
+        explicit_date_in_text: true,
+      };
+    }
+    // Out of range — fall through to the submission timestamp rather than trust it.
   }
 
   // Priority 2: Convert client timestamp to user timezone
-  const timestamp = typeof clientTimestamp === 'string' 
-    ? new Date(clientTimestamp) 
-    : clientTimestamp;
-  
+
   const zonedDate = toZonedTime(timestamp, userTimezone);
   const resolved_date = format(zonedDate, 'yyyy-MM-dd');
 

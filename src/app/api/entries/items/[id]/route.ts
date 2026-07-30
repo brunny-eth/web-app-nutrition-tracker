@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserId } from '@/lib/auth';
+import { validateNutritionUpdate } from '@/lib/validation';
 
 function getSupabase() {
   return createClient(
@@ -60,33 +61,19 @@ export async function PATCH(
       potassium_mg,
     } = body;
 
-    // Validation: no negatives, minimum 5 calories
-    if (calories !== undefined && (calories < 5 || calories < 0)) {
-      return NextResponse.json({ error: 'Calories must be at least 5' }, { status: 400 });
-    }
-    if (protein_g !== undefined && protein_g < 0) {
-      return NextResponse.json({ error: 'Protein cannot be negative' }, { status: 400 });
-    }
-    if (carbs_g !== undefined && carbs_g < 0) {
-      return NextResponse.json({ error: 'Carbs cannot be negative' }, { status: 400 });
-    }
-    if (fat_g !== undefined && fat_g < 0) {
-      return NextResponse.json({ error: 'Fat cannot be negative' }, { status: 400 });
-    }
-    if (fiber_g !== undefined && fiber_g < 0) {
-      return NextResponse.json({ error: 'Fiber cannot be negative' }, { status: 400 });
-    }
-    if (added_sugar_g !== undefined && added_sugar_g < 0) {
-      return NextResponse.json({ error: 'Sugar cannot be negative' }, { status: 400 });
-    }
-    if (saturated_fat_g !== undefined && saturated_fat_g < 0) {
-      return NextResponse.json({ error: 'Saturated fat cannot be negative' }, { status: 400 });
-    }
-    if (sodium_mg !== undefined && sodium_mg < 0) {
-      return NextResponse.json({ error: 'Sodium cannot be negative' }, { status: 400 });
-    }
-    if (potassium_mg !== undefined && potassium_mg < 0) {
-      return NextResponse.json({ error: 'Potassium cannot be negative' }, { status: 400 });
+    const validation = validateNutritionUpdate({
+      calories,
+      protein_g,
+      carbs_g,
+      fat_g,
+      saturated_fat_g,
+      fiber_g,
+      added_sugar_g,
+      sodium_mg,
+      potassium_mg,
+    });
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
     const supabase = getSupabase();
@@ -153,9 +140,10 @@ export async function PATCH(
       const ratio = current.fat_g > 0 ? fat_g / current.fat_g : 1;
       updates.fat_low = Math.round(current.fat_low * ratio * 10) / 10;
       updates.fat_high = Math.round(current.fat_high * ratio * 10) / 10;
-      // Also adjust saturated/unsaturated proportionally
+      // Scale saturated fat with the total, then keep unsaturated as the remainder.
       updates.saturated_fat_g = Math.round(current.saturated_fat_g * ratio * 10) / 10;
-      updates.unsaturated_fat_g = Math.round(current.unsaturated_fat_g * ratio * 10) / 10;
+      updates.unsaturated_fat_g =
+        Math.round(Math.max(0, fat_g - (updates.saturated_fat_g as number)) * 10) / 10;
       if (!overriddenFields.includes('fat_g')) overriddenFields.push('fat_g');
     }
 

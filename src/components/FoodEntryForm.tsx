@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { IMAGE_ONLY_TEXT } from '@/types/nutrition';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
@@ -58,6 +59,8 @@ export function FoodEntryForm({
       const data = await res.json();
       const seen = new Set<string>();
       const unique: string[] = [];
+      // Matches IMAGE_ONLY_TEXT plus the "2 servings" variants older rows may carry —
+      // those describe a photo, not a meal, so they're useless as suggestions.
       const imageOnlyPattern = /^\d*\.?\d*\s*servings?$/i;
       for (const entry of (data.entries || [])) {
         const text = entry.raw_text.trim();
@@ -186,7 +189,7 @@ export function FoodEntryForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          raw_text: text.trim() || (image ? '1 serving' : ''),
+          raw_text: text.trim() || (image ? IMAGE_ONLY_TEXT : ''),
           image: image || undefined,
           client_timestamp: new Date().toISOString(),
           override_date: selectedDate !== today ? selectedDate : undefined,

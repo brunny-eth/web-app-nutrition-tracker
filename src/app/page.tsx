@@ -9,6 +9,7 @@ import { EntryList } from '@/components/EntryList';
 import { ActivitySelector, type ActivityData } from '@/components/ActivitySelector';
 import { DailyChecklist, type ChecklistData } from '@/components/DailyChecklist';
 import { proteinTargetGrams, resolveActivityMultiplier } from '@/lib/tdee';
+import { aggregateItems } from '@/lib/aggregation';
 import { supplementFiberBonus } from '@/lib/supplements';
 import type { Supplement } from '@/types/database';
 
@@ -194,51 +195,7 @@ export default function Home() {
   };
 
   // Calculate totals from entries
-  const totals = entries.reduce(
-    (acc, entry) => {
-      entry.entry_items.forEach((item) => {
-        acc.calories.value += item.calories;
-        acc.calories.low += item.calories_low;
-        acc.calories.high += item.calories_high;
-        acc.protein.value += item.protein_g;
-        acc.protein.low += item.protein_low;
-        acc.protein.high += item.protein_high;
-        acc.carbs.value += item.carbs_g;
-        acc.carbs.low += item.carbs_low;
-        acc.carbs.high += item.carbs_high;
-        acc.fat.value += item.fat_g;
-        acc.fat.low += item.fat_low;
-        acc.fat.high += item.fat_high;
-        acc.saturatedFat.value += item.saturated_fat_g || 0;
-        acc.saturatedFat.low += item.saturated_fat_low || 0;
-        acc.saturatedFat.high += item.saturated_fat_high || 0;
-        acc.fiber.value += item.fiber_g || 0;
-        acc.fiber.low += item.fiber_low || 0;
-        acc.fiber.high += item.fiber_high || 0;
-        acc.addedSugar.value += item.added_sugar_g || 0;
-        acc.addedSugar.low += item.added_sugar_low || 0;
-        acc.addedSugar.high += item.added_sugar_high || 0;
-        acc.sodium.value += item.sodium_mg || 0;
-        acc.sodium.low += item.sodium_low || 0;
-        acc.sodium.high += item.sodium_high || 0;
-        acc.potassium.value += item.potassium_mg || 0;
-        acc.potassium.low += item.potassium_low || 0;
-        acc.potassium.high += item.potassium_high || 0;
-      });
-      return acc;
-    },
-    {
-      calories: { value: 0, low: 0, high: 0 },
-      protein: { value: 0, low: 0, high: 0 },
-      carbs: { value: 0, low: 0, high: 0 },
-      fat: { value: 0, low: 0, high: 0 },
-      saturatedFat: { value: 0, low: 0, high: 0 },
-      fiber: { value: 0, low: 0, high: 0 },
-      addedSugar: { value: 0, low: 0, high: 0 },
-      sodium: { value: 0, low: 0, high: 0 },
-      potassium: { value: 0, low: 0, high: 0 },
-    }
-  );
+  const totals = aggregateItems(entries.flatMap((entry) => entry.entry_items));
 
   // Fold psyllium's fiber into the total when it's ticked in today's checklist.
   // Recomputes on every render, so the fiber card ticks up the instant the toggle flips.

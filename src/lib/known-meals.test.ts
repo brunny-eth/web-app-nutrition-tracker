@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { config } from 'dotenv';
 import { MEAL_EVAL_CASES, relativeError, sumMetric, type MealMetric } from './meal-eval-cases';
 
-// Must run before ./openai is loaded — it reads ANTHROPIC_API_KEY at module scope,
+// Must run before ./nutrition-ai is loaded — it reads ANTHROPIC_API_KEY at module scope,
 // and static imports are hoisted above this call. Hence the dynamic import below.
 config({ path: '.env.local' });
 
@@ -33,10 +33,10 @@ const describeIfApiKey = hasApiKey ? describe : describe.skip;
 
 describeIfApiKey('Known Meals Regression (requires ANTHROPIC_API_KEY)', () => {
   const today = '2026-01-29';
-  let parseMealDescription: typeof import('./openai').parseMealDescription;
+  let parseMealDescription: typeof import('./nutrition-ai').parseMealDescription;
 
   beforeAll(async () => {
-    ({ parseMealDescription } = await import('./openai'));
+    ({ parseMealDescription } = await import('./nutrition-ai'));
   });
 
   describe.concurrent('Reference meals', () => {

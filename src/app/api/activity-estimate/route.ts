@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserId } from '@/lib/auth';
-import { estimateActivityMultiplier } from '@/lib/openai';
+import { estimateActivityMultiplier } from '@/lib/nutrition-ai';
 
 /**
  * POST /api/activity-estimate - Estimate activity multiplier from natural language description

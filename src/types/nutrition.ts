@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+/**
+ * Stand-in description for an image-only entry, where the photo carries the
+ * nutrition data and the user typed nothing. Shared so the form, the parser, and
+ * the recent-meals filter agree on the sentinel instead of each hardcoding it.
+ */
+export const IMAGE_ONLY_TEXT = '1 serving';
+
 // Schema for a single food item with 90% confidence ranges
 export const FoodItemSchema = z.object({
   food_name: z.string().describe('Name of the food item'),
@@ -21,9 +28,6 @@ export const FoodItemSchema = z.object({
   saturated_fat_g: z.number().describe('Saturated fat in grams'),
   saturated_fat_low: z.number().describe('Low estimate (90% CI)'),
   saturated_fat_high: z.number().describe('High estimate (90% CI)'),
-  unsaturated_fat_g: z.number().describe('Unsaturated fat in grams'),
-  unsaturated_fat_low: z.number().describe('Low estimate (90% CI)'),
-  unsaturated_fat_high: z.number().describe('High estimate (90% CI)'),
   fiber_g: z.number().describe('Fiber in grams'),
   fiber_low: z.number().describe('Low estimate (90% CI)'),
   fiber_high: z.number().describe('High estimate (90% CI)'),
@@ -45,6 +49,11 @@ export type FoodItem = z.infer<typeof FoodItemSchema>;
 export const ParsedMealSchema = z.object({
   items: z.array(FoodItemSchema).describe('List of parsed food items'),
   explicit_date: z.string().nullable().describe('If user specified a date in the text, return it as YYYY-MM-DD. Otherwise null.'),
+  rejection_reason: z.string().nullable().describe(
+    'Set this when the input cannot be parsed into nutrition data — for example a '
+    + 'photo of a plate of food rather than a label. Explain why in one sentence, '
+    + 'addressed to the user. Leave null on success.'
+  ),
 });
 
 export type ParsedMeal = z.infer<typeof ParsedMealSchema>;
@@ -94,7 +103,6 @@ export interface DailySummary {
     carbs: { value: number; low: number; high: number };
     fat: { value: number; low: number; high: number };
     saturated_fat: { value: number; low: number; high: number };
-    unsaturated_fat: { value: number; low: number; high: number };
     fiber: { value: number; low: number; high: number };
     sodium: { value: number; low: number; high: number };
     added_sugar: { value: number; low: number; high: number };

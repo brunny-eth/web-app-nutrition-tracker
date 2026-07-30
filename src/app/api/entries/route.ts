@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { getUserId } from '@/lib/auth';
-import { parseMealDescription, validateParsedMeal } from '@/lib/openai';
+import { parseMealDescription, MealRejectedError } from '@/lib/nutrition-ai';
+import { repairParsedMeal } from '@/lib/meal-repair';
 import { resolveDate, getTodayInTimezone } from '@/lib/date-resolution';
+import { IMAGE_ONLY_TEXT } from '@/types/nutrition';
 
 /**
  * POST /api/entries - Create a new food entry
@@ -34,18 +36,16 @@ export async function POST(request: NextRequest) {
     const timezone = settings?.timezone || 'America/New_York';
     const today = getTodayInTimezone(timezone);
 
-    // Parse the meal with GPT-4o (with optional image)
-    const parsedMeal = await parseMealDescription(
-      raw_text?.trim() || '1 serving', 
-      today, 
-      image || undefined
-    );
+    // One value for both the parse and the stored row — the stored one used to be
+    // `raw_text.trim()`, which threw on an image-only request that omitted the field.
+    const mealText: string = raw_text?.trim() || IMAGE_ONLY_TEXT;
 
-    // Validate the response
-    const validation = validateParsedMeal(parsedMeal);
-    if (!validation.valid) {
-      console.warn('Parsed meal validation warnings:', validation.errors);
-      // Continue anyway - these are warnings, not blockers
+    const parsed = await parseMealDescription(mealText, today, image || undefined);
+
+    // Clamp impossible ranges before they reach the database.
+    const { meal: parsedMeal, repairs } = repairParsedMeal(parsed);
+    if (repairs.length > 0) {
+      console.warn('Repaired parsed meal:', repairs);
     }
 
     // Resolve the date
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       .from('entries')
       .insert({
         user_id: userId,
-        raw_text: raw_text.trim(),
+        raw_text: mealText,
         resolved_date: finalDate,
         explicit_date_in_text: explicitDateInText,
       })
@@ -105,9 +105,12 @@ export async function POST(request: NextRequest) {
       saturated_fat_g: item.saturated_fat_g,
       saturated_fat_low: item.saturated_fat_low,
       saturated_fat_high: item.saturated_fat_high,
-      unsaturated_fat_g: item.unsaturated_fat_g,
-      unsaturated_fat_low: item.unsaturated_fat_low,
-      unsaturated_fat_high: item.unsaturated_fat_high,
+      // Derived rather than estimated: it's just the remainder of total fat, and
+      // asking the model for it separately produced a third number that could
+      // contradict the other two. The columns are NOT NULL, so still written.
+      unsaturated_fat_g: Math.max(0, item.fat_g - item.saturated_fat_g),
+      unsaturated_fat_low: Math.max(0, item.fat_low - item.saturated_fat_high),
+      unsaturated_fat_high: Math.max(0, item.fat_high - item.saturated_fat_low),
       fiber_g: item.fiber_g,
       fiber_low: item.fiber_low,
       fiber_high: item.fiber_high,
@@ -129,24 +132,26 @@ export async function POST(request: NextRequest) {
 
     if (itemsError) {
       console.error('Entry items creation error:', itemsError);
-      // Entry was created, but items failed - should we rollback?
-      // For now, return partial success
-      return NextResponse.json({ 
-        entry,
-        warning: 'Entry created but items failed to save',
-      }, { status: 201 });
+      // Roll the entry back rather than leaving one with no items behind — an
+      // itemless entry still counts as a tracked day in trends and drags the
+      // averages toward zero.
+      await supabase.from('entries').delete().eq('id', entry.id);
+      return NextResponse.json({ error: 'Failed to save food items' }, { status: 500 });
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       entry,
       items: parsedMeal.items,
-      validation_warnings: validation.errors.length > 0 ? validation.errors : undefined,
     }, { status: 201 });
 
   } catch (error) {
+    // The input can't be parsed — the user's to fix, so don't report it as a server fault.
+    if (error instanceof MealRejectedError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error('Entry creation error:', error);
-    return NextResponse.json({ 
-      error: error instanceof Error ? error.message : 'Failed to create entry' 
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Failed to create entry'
     }, { status: 500 });
   }
 }
