@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -11,15 +10,15 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine,
   Area,
   ComposedChart,
-  Bar,
 } from 'recharts';
 
 interface ChartDataPoint {
   date: string;
   calories: number;
+  caloriesLow: number;
+  caloriesHigh: number;
   protein: number;
   carbs: number;
   fat: number;
@@ -153,7 +152,19 @@ export default function TrendsPage() {
     weightPoints.length >= 2 ? weightPoints[weightPoints.length - 1].weightLbs - weightPoints[0].weightLbs : null;
   const weightSeries = withTrailingAverages(weightPoints, ['weightLbs']);
   const weightDomain = paddedDomain(
-    weightSeries.flatMap((p) => [p.weightLbs, p.weightLbsAvg7]).filter((v): v is number => v != null)
+    weightSeries.flatMap((p) => [p.weightLbs, p.weightLbsAvg7]).filter((v): v is number => v != null),
+    MIN_WEIGHT_SPAN_LBS
+  );
+  // Uncertainty band for consumed calories, drawn as a transparent base plus the
+  // band height stacked on top — recharts has no first-class low/high area.
+  const calorieSeries = chartData.map((d) => ({
+    ...d,
+    caloriesBand: Math.max(d.caloriesHigh - d.caloriesLow, 0),
+  }));
+  const calorieDomain = paddedDomain(
+    calorieSeries
+      .flatMap((d) => [d.caloriesLow, d.caloriesHigh, d.tdee, d.targetCalories])
+      .filter((v): v is number => v != null)
   );
   // One pass for every daily chart below; each reads `<field>Avg7`.
   const trendData = withTrailingAverages(chartData, [
@@ -251,22 +262,25 @@ export default function TrendsPage() {
         {/* Main Calories Chart */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-lg font-medium text-zinc-900 dark:text-zinc-100">
-            Calories & Deficit
+            Calories
           </h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            Shaded band is the estimation range on what you logged
+          </p>
           {chartData.length === 0 ? (
             <p className="py-12 text-center text-zinc-500">No data for this period</p>
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <ComposedChart data={calorieSeries} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
-                <XAxis 
-                  dataKey="date" 
+                <XAxis
+                  dataKey="date"
                   tickFormatter={formatDate}
                   tick={{ fontSize: 12, fill: '#71717a' }}
                 />
-                <YAxis 
+                <YAxis
                   tick={{ fontSize: 12, fill: '#71717a' }}
-                  domain={['auto', 'auto']}
+                  domain={calorieDomain}
                 />
                 <Tooltip
                   contentStyle={{
@@ -276,22 +290,46 @@ export default function TrendsPage() {
                   }}
                   labelFormatter={formatTooltipLabel}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(value: any, name: any) => {
+                  formatter={(value: any, name: any, entry: any) => {
                     const labels: Record<string, string> = {
                       calories: 'Consumed',
                       tdee: 'TDEE',
                       targetCalories: 'Target',
-                      deficit: 'Deficit',
                     };
-                    return [Math.round(value || 0) + ' kcal', labels[name] || name];
+                    if (value == null) return ['—', labels[name] || name];
+                    // Consumed carries the parsing uncertainty; show it the way the
+                    // dashboard does, as a margin either side of the estimate.
+                    if (name === 'calories') {
+                      const row = entry?.payload;
+                      const margin = row ? Math.round((row.caloriesHigh - row.caloriesLow) / 2) : 0;
+                      return [
+                        `${Math.round(value)}${margin > 0 ? ` ± ${margin}` : ''} kcal`,
+                        labels[name],
+                      ];
+                    }
+                    return [Math.round(value) + ' kcal', labels[name] || name];
                   }}
                 />
                 <Legend />
-                <Bar 
-                  dataKey="deficit" 
-                  fill="#22c55e" 
-                  opacity={0.3}
-                  name="Deficit"
+                {/* Transparent base lifts the visible band to caloriesLow. */}
+                <Area
+                  dataKey="caloriesLow"
+                  stackId="calorieBand"
+                  stroke="none"
+                  fill="none"
+                  legendType="none"
+                  tooltipType="none"
+                  isAnimationActive={false}
+                />
+                <Area
+                  dataKey="caloriesBand"
+                  stackId="calorieBand"
+                  stroke="none"
+                  fill="#3b82f6"
+                  fillOpacity={0.18}
+                  name="Estimate range"
+                  tooltipType="none"
+                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -830,17 +868,22 @@ function withTrailingAverages<T extends { date: string }>(
  */
 const MIN_WEIGHT_SPAN_LBS = 10;
 
-function paddedDomain(values: number[]): [number, number] {
-  if (values.length === 0) return [0, MIN_WEIGHT_SPAN_LBS];
+/**
+ * Axis bounds padded by 10%, widened to `minSpan` if the data is flatter than that.
+ * Set explicitly rather than left to 'auto' because a chart containing an Area
+ * otherwise anchors its axis at zero, squashing the series into the top band.
+ */
+function paddedDomain(values: number[], minSpan = 0): [number, number] {
+  if (values.length === 0) return [0, minSpan || 1];
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = Math.max(max - min, 0);
-  if (span >= MIN_WEIGHT_SPAN_LBS) {
+  if (span >= minSpan) {
     const pad = span * 0.1;
     return [Math.floor(min - pad), Math.ceil(max + pad)];
   }
   const mid = (min + max) / 2;
-  return [Math.floor(mid - MIN_WEIGHT_SPAN_LBS / 2), Math.ceil(mid + MIN_WEIGHT_SPAN_LBS / 2)];
+  return [Math.floor(mid - minSpan / 2), Math.ceil(mid + minSpan / 2)];
 }
 
 function AdherenceCell({ pct, taken, days }: { pct: number | null; taken?: number; days?: number }) {

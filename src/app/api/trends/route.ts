@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
       resolved_date,
       entry_items (
         calories,
+        calories_low,
+        calories_high,
         protein_g,
         carbs_g,
         fat_g,
@@ -127,6 +129,9 @@ export async function GET(request: NextRequest) {
   // Aggregate by date
   const dailyData: Record<string, {
     calories: number;
+    // Estimation range from parsing each food item, summed across the day.
+    caloriesLow: number;
+    caloriesHigh: number;
     protein: number;
     carbs: number;
     fat: number;
@@ -158,6 +163,8 @@ export async function GET(request: NextRequest) {
 
       dailyData[date] = {
         calories: 0,
+        caloriesLow: 0,
+        caloriesHigh: 0,
         protein: 0,
         carbs: 0,
         fat: 0,
@@ -174,6 +181,9 @@ export async function GET(request: NextRequest) {
 
     entry.entry_items?.forEach((item: Record<string, number>) => {
       dailyData[date].calories += item.calories || 0;
+      // Fall back to the point estimate so a day with older rows still spans a range.
+      dailyData[date].caloriesLow += item.calories_low ?? item.calories ?? 0;
+      dailyData[date].caloriesHigh += item.calories_high ?? item.calories ?? 0;
       dailyData[date].protein += item.protein_g || 0;
       dailyData[date].carbs += item.carbs_g || 0;
       dailyData[date].fat += item.fat_g || 0;
