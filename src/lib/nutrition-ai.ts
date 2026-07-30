@@ -6,6 +6,8 @@ import {
   ActivityEstimateSchema,
   type ActivityEstimate,
   type FoodItem,
+  ParsedRecipeSchema,
+  type ParsedRecipe,
   IMAGE_ONLY_TEXT,
 } from '@/types/nutrition';
 
@@ -131,6 +133,20 @@ Output: 3 items
   3. "banana" (1 medium): 105 cal, 1.3g protein, 27g carbs, 0.4g fat, 0.1g sat_fat, 3.1g fiber, 1mg sodium, 0g added_sugar, 420mg potassium
      Assumptions: Banana sugars are natural - added_sugar = 0.`;
 
+/** Turn a `data:image/jpeg;base64,...` URL into an image block, or null if malformed. */
+function toImageBlock(dataUrl: string): Anthropic.ImageBlockParam | null {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  return {
+    type: 'image',
+    source: {
+      type: 'base64',
+      media_type: match[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+      data: match[2],
+    },
+  };
+}
+
 export async function parseMealDescription(
   mealText: string,
   todayDate: string, // YYYY-MM-DD format, in user's timezone
@@ -138,20 +154,9 @@ export async function parseMealDescription(
 ): Promise<ParsedMeal> {
   const userContent: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = [];
 
-  // Add image if provided
   if (imageBase64) {
-    // imageBase64 arrives as a data URL: "data:image/jpeg;base64,..."
-    const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
-    if (match) {
-      userContent.push({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: match[1] as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-          data: match[2],
-        },
-      });
-    }
+    const block = toImageBlock(imageBase64);
+    if (block) userContent.push(block);
   }
 
   // Build text prompt
@@ -208,6 +213,138 @@ export async function parseMealDescription(
   if (parsed.items.length === 0) {
     throw new MealRejectedError(
       "Couldn't identify any food in that. Try adding more detail."
+    );
+  }
+
+  return parsed;
+}
+
+/**
+ * Separate from SYSTEM_PROMPT because four of its rules are actively wrong for a
+ * recipe: recipe images would be rejected as invalid, overlapping screenshots would
+ * double-count, a "nutrition per serving" panel would be mistaken for the batch
+ * total, and unlisted cooking fat would be added on top of the oil the recipe
+ * already calls for.
+ */
+const RECIPE_SYSTEM_PROMPT = `You are a nutrition analysis assistant. Your job is to read a recipe — from images, a written description, or both — and return the total nutritional content of the ENTIRE batch as it was actually cooked.
+
+WHAT YOU ARE ESTIMATING:
+- The total for the whole batch, NOT one serving. If the recipe yields a pot of food, you are costing the entire pot.
+- The user eats this over several days in measured portions, so the total is what matters. Do not divide by a serving count.
+
+READING THE INPUT:
+1. NEVER ask clarifying questions. Make reasonable assumptions and list them.
+2. The user's written description OVERRIDES the recipe images wherever they disagree. If the recipe says 1 lb ground beef and the user says they used 2 lb, use 2 lb. If they say they skipped an ingredient, omit it. If they say they doubled it, double everything.
+3. Multiple images are usually pages, scroll positions, or crops of the SAME recipe, and they often overlap. Merge them into one ingredient list and count each ingredient EXACTLY ONCE. Never sum the same ingredient twice because it appeared in two images.
+4. IGNORE any "Nutrition Facts" or "per serving" panel printed on the recipe. It describes a serving of the original recipe, not this batch, and the user has likely modified the quantities. Always compute from the ingredient list itself.
+5. Ignore non-ingredient content: instructions, prep steps, commentary, ads, comments.
+6. Use ingredient amounts as written. For a range ("1-2 tbsp"), use the midpoint. For "to taste", use a small typical amount and note it.
+
+NUTRITIONAL DATA:
+- Use standard USDA values as baseline.
+- Adjust for preparation method where the recipe specifies it (frying, roasting in oil, draining fat).
+- Include ONLY the fats the recipe lists or the user mentions. Do NOT add cooking oil that isn't specified — a recipe already accounts for its own fat, and adding more double-counts it.
+- If the recipe says to drain rendered fat, reduce the fat accordingly and note it.
+- saturated_fat must never exceed total fat.
+- Dry vs cooked matters: use the state the recipe specifies. "1 cup dry lentils" is roughly triple the nutrition of "1 cup cooked lentils". State which you assumed.
+- ADDED SUGAR: Only sugars added during processing/cooking, NOT natural sugars from whole fruits, plain dairy, or vegetables. Honey, syrup, and table sugar in a recipe are added sugar.
+- POTASSIUM: Include potassium in mg. Good sources include potatoes (~900mg each), beans and lentils, spinach, tomatoes, bananas (~400mg).
+
+ITEMIZE PER INGREDIENT:
+- Return one item per ingredient, with its batch quantity — "2 lb ground beef, 90/10", "1.5 cups dry brown lentils".
+- Do NOT collapse the recipe into a single dish. The user needs to see where the calories sit and correct a single ingredient without redoing the whole batch.
+- Combine only genuinely trivial items (a pinch of several spices can be one "spices" line).
+
+CONFIDENCE RANGES:
+- Provide tight intervals when quantities are explicit: low = estimate × 0.9, high = estimate × 1.1.
+- Widen to ±20% for ingredients whose amount you had to guess.
+
+ASSUMPTIONS:
+- List what you assumed, especially: dry vs cooked state, unspecified quantities, whether fat was drained, and anything you took from the description over the images.
+
+IF THERE IS NO RECIPE:
+- If the images and description contain no identifiable recipe or ingredient list, return an empty items list and set rejection_reason explaining what you'd need.`;
+
+export async function parseRecipeBatch(
+  description: string,
+  imagesBase64: string[] = []
+): Promise<ParsedRecipe> {
+  const userContent: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = [];
+
+  // Images first, then the description — so the description reads as instructions
+  // about the images it follows, which is also the order rule 2 depends on.
+  imagesBase64.forEach((dataUrl, i) => {
+    const block = toImageBlock(dataUrl);
+    if (!block) return;
+    if (imagesBase64.length > 1) {
+      userContent.push({ type: 'text', text: `Recipe image ${i + 1} of ${imagesBase64.length}:` });
+    }
+    userContent.push(block);
+  });
+
+  const hasImages = userContent.length > 0;
+  const trimmed = description.trim();
+
+  if (hasImages && trimmed) {
+    userContent.push({
+      type: 'text',
+      text:
+        `The images above are one recipe. My notes on how I actually cooked it — these `
+        + `take priority over the images:\n\n"${trimmed}"\n\n`
+        + `Give me the total for the whole batch, itemized per ingredient.`,
+    });
+  } else if (hasImages) {
+    userContent.push({
+      type: 'text',
+      text:
+        'The images above are one recipe, cooked as written. Give me the total for the '
+        + 'whole batch, itemized per ingredient.',
+    });
+  } else {
+    userContent.push({
+      type: 'text',
+      text:
+        `Here is a recipe I cooked. Give me the total for the whole batch, itemized `
+        + `per ingredient:\n\n"${trimmed}"`,
+    });
+  }
+
+  const response = await client.messages.create({
+    model: MEAL_MODEL,
+    max_tokens: 8192,
+    thinking: THINKING,
+    system: [{
+      type: 'text',
+      text: RECIPE_SYSTEM_PROMPT,
+      cache_control: { type: 'ephemeral' },
+    }],
+    messages: [{ role: 'user', content: userContent }],
+    tools: [{
+      name: 'parse_recipe',
+      description: 'Return the total nutritional content of an entire cooked recipe',
+      strict: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      input_schema: z.toJSONSchema(ParsedRecipeSchema) as any,
+    }],
+    tool_choice: { type: 'tool', name: 'parse_recipe' },
+  });
+
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+  );
+
+  if (!toolUse) {
+    throw new Error('Failed to parse recipe');
+  }
+
+  const parsed = ParsedRecipeSchema.parse(toolUse.input);
+
+  if (parsed.rejection_reason) {
+    throw new MealRejectedError(parsed.rejection_reason);
+  }
+  if (parsed.items.length === 0) {
+    throw new MealRejectedError(
+      "Couldn't find an ingredient list in that. Try adding the ingredients as text."
     );
   }
 

@@ -6,6 +6,10 @@ import { repairParsedMeal } from '@/lib/meal-repair';
 import { resolveDate, getTodayInTimezone } from '@/lib/date-resolution';
 import { IMAGE_ONLY_TEXT } from '@/types/nutrition';
 
+// A meal parse measured 6-14s; Vercel's default function timeout leaves little
+// headroom above that, and a killed request loses the parse after paying for it.
+export const maxDuration = 60;
+
 /**
  * POST /api/entries - Create a new food entry
  */

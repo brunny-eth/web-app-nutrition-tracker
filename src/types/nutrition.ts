@@ -58,6 +58,27 @@ export const ParsedMealSchema = z.object({
 
 export type ParsedMeal = z.infer<typeof ParsedMealSchema>;
 
+/**
+ * A whole cooked recipe, parsed once and then eaten from over several days.
+ * No explicit_date: a batch isn't eaten at a point in time, the portions are.
+ */
+export const ParsedRecipeSchema = z.object({
+  name: z.string().describe(
+    'Short label for this batch, 2-5 words, e.g. "Lentil beef slop". Plain and '
+    + 'recognizable rather than a full recipe title.'
+  ),
+  items: z.array(FoodItemSchema).describe(
+    'Every ingredient, with amounts for the ENTIRE batch — not per serving.'
+  ),
+  rejection_reason: z.string().nullable().describe(
+    'Set this when no recipe or ingredient list can be identified from the images '
+    + 'and description. Explain why in one sentence, addressed to the user. '
+    + 'Leave null on success.'
+  ),
+});
+
+export type ParsedRecipe = z.infer<typeof ParsedRecipeSchema>;
+
 // Schema for LLM activity estimation response
 export const ActivityEstimateSchema = z.object({
   multiplier: z.number().describe('Estimated Harris-Benedict activity multiplier (1.1–2.2 scale)'),
