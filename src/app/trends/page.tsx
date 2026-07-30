@@ -321,13 +321,15 @@ export default function TrendsPage() {
                   tooltipType="none"
                   isAnimationActive={false}
                 />
+                {/* Out of the legend: the band reads as context around the consumed
+                    line, and its tooltip already spells the range out as ± kcal. */}
                 <Area
                   dataKey="caloriesBand"
                   stackId="calorieBand"
                   stroke="none"
                   fill="#3b82f6"
                   fillOpacity={0.18}
-                  name="Estimate range"
+                  legendType="none"
                   tooltipType="none"
                   isAnimationActive={false}
                 />
