@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getUserId } from '@/lib/auth';
 import { supplementFiberBonus } from '@/lib/supplements';
 import { FALLBACK_ACTIVITY_MULTIPLIER, resolveActivityMultiplier } from '@/lib/tdee';
+import { addDaysToDateString } from '@/lib/date-resolution';
 import { roundLbs } from '@/lib/units';
 import { DEFAULT_SATURATED_FAT_PERCENT, saturatedFatPercentOfCalories } from '@/lib/targets';
 
@@ -229,15 +230,16 @@ export async function GET(request: NextRequest) {
   const todayStr = endDateStr;
   const chartData = allChartData.filter((d) => d.date !== todayStr);
 
-  // Calculate averages for last 7 and 30 days (already excludes today via chartData)
-  const now = new Date();
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // Averages for the last 7 and 30 complete days — today is already out of chartData.
+  // Cutoffs are date strings compared against date strings: the previous version
+  // compared a UTC-midnight parse of d.date against a Date carrying the current time
+  // of day, so the oldest day of each window almost always fell just outside it and
+  // "7 days" was really 6.
+  const sevenDayCutoff = addDaysToDateString(todayStr, -7);
+  const thirtyDayCutoff = addDaysToDateString(todayStr, -30);
 
-  const last7Days = chartData.filter((d) => new Date(d.date) >= sevenDaysAgo);
-  const last30Days = chartData.filter((d) => new Date(d.date) >= thirtyDaysAgo);
+  const last7Days = chartData.filter((d) => d.date >= sevenDayCutoff);
+  const last30Days = chartData.filter((d) => d.date >= thirtyDayCutoff);
 
   const calculateAverages = (data: typeof chartData) => {
     if (data.length === 0) return null;
@@ -299,8 +301,10 @@ export async function GET(request: NextRequest) {
   const todayStrForChecklist = endDateStr;
   const checklistRows = (checklists ?? []).filter((c) => c.resolved_date !== todayStrForChecklist);
 
-  const computeAdherence = (windowStart: Date) => {
-    const rows = checklistRows.filter((c) => new Date(c.resolved_date) >= windowStart);
+  // Same string-vs-string comparison as the averages above; this window was short
+  // by a day for the same reason.
+  const computeAdherence = (cutoff: string) => {
+    const rows = checklistRows.filter((c) => c.resolved_date >= cutoff);
     if (rows.length === 0) return null;
 
     const supplements = supplementsList.map((s) => {
@@ -331,8 +335,8 @@ export async function GET(request: NextRequest) {
       month: calculateAverages(last30Days),
     },
     adherence: {
-      week: computeAdherence(sevenDaysAgo),
-      month: computeAdherence(thirtyDaysAgo),
+      week: computeAdherence(sevenDayCutoff),
+      month: computeAdherence(thirtyDayCutoff),
     },
     recommendations,
     settings: settings ? {

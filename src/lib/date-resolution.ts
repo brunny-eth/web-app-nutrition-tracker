@@ -98,6 +98,20 @@ export function getYesterdayInTimezone(userTimezone: string = DEFAULT_TIMEZONE):
 }
 
 /**
+ * Shifts a YYYY-MM-DD string by whole days, returning YYYY-MM-DD.
+ *
+ * Use this to build window cutoffs that get compared against stored dates. Since
+ * YYYY-MM-DD sorts chronologically as a string, comparing two of them is exact —
+ * whereas comparing `new Date('2026-07-24')` (UTC midnight) against a `Date`
+ * carrying the current time of day silently drops the oldest day of the window.
+ */
+export function addDaysToDateString(dateStr: string, deltaDays: number): string {
+  const date = new Date(dateStr + 'T00:00:00Z');
+  date.setUTCDate(date.getUTCDate() + deltaDays);
+  return date.toISOString().split('T')[0];
+}
+
+/**
  * Formats a date string for display
  */
 export function formatDateForDisplay(dateStr: string): string {
