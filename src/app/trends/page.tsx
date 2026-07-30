@@ -151,8 +151,20 @@ export default function TrendsPage() {
   const latestWeight = weightPoints.at(-1) ?? null;
   const weightChange =
     weightPoints.length >= 2 ? weightPoints[weightPoints.length - 1].weightLbs - weightPoints[0].weightLbs : null;
-  const weightSeries = withTrailingAverage(weightPoints);
-  const weightDomain = paddedDomain(weightSeries.flatMap((p) => [p.weightLbs, p.avg7]));
+  const weightSeries = withTrailingAverages(weightPoints, ['weightLbs']);
+  const weightDomain = paddedDomain(
+    weightSeries.flatMap((p) => [p.weightLbs, p.weightLbsAvg7]).filter((v): v is number => v != null)
+  );
+  // One pass for every daily chart below; each reads `<field>Avg7`.
+  const trendData = withTrailingAverages(chartData, [
+    'protein',
+    'satFatPercent',
+    'addedSugar',
+    'kNaRatio',
+    'fiber',
+    'bpSystolic',
+    'bpDiastolic',
+  ]);
   const monthAdh = adherence.month;
   const weekAdh = adherence.week;
 
@@ -324,7 +336,7 @@ export default function TrendsPage() {
             <p className="py-12 text-center text-zinc-500">No data for this period</p>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={chartData.map(d => ({ ...d, proteinTarget: settings?.targetProtein }))} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <ComposedChart data={trendData.map(d => ({ ...d, proteinTarget: settings?.targetProtein }))} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                 <XAxis 
                   dataKey="date" 
@@ -340,7 +352,7 @@ export default function TrendsPage() {
                   }}
                   labelFormatter={formatTooltipLabel}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(value: any, name: any) => [Math.round(value || 0) + 'g', name]}
+                  formatter={(value: any, name: any) => [value == null ? '—' : Math.round(value as number) + 'g', name]}
                 />
                 <Legend />
                 <Line
@@ -356,10 +368,19 @@ export default function TrendsPage() {
                 <Line
                   type="monotone"
                   dataKey="protein"
-                  stroke="#22c55e"
-                  strokeWidth={2}
-                  dot={{ fill: '#22c55e', r: 3 }}
+                  stroke="#86efac"
+                  strokeWidth={1.5}
+                  dot={{ fill: '#86efac', r: 2 }}
                   name="Consumed"
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="proteinAvg7"
+                  stroke="#22c55e"
+                  strokeWidth={2.5}
+                  dot={false}
+                  name="7-day avg"
                   connectNulls
                 />
               </ComposedChart>
@@ -381,7 +402,7 @@ export default function TrendsPage() {
               <p className="py-8 text-center text-zinc-500 text-sm">No data</p>
             ) : (
               <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={chartData.map(d => ({ ...d, satFatLimitPct: recommendations.saturatedFatPercent }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <ComposedChart data={trendData.map(d => ({ ...d, satFatLimitPct: recommendations.saturatedFatPercent }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={[0, 'auto']} unit="%" />
@@ -396,7 +417,8 @@ export default function TrendsPage() {
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
                   <Line type="monotone" dataKey="satFatLimitPct" stroke="#7f1d1d" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Limit" connectNulls />
-                  <Line type="monotone" dataKey="satFatPercent" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} name="% of calories" connectNulls />
+                  <Line type="monotone" dataKey="satFatPercent" stroke="#fca5a5" strokeWidth={1.5} dot={{ r: 2 }} name="% of calories" connectNulls />
+                  <Line type="monotone" dataKey="satFatPercentAvg7" stroke="#ef4444" strokeWidth={2.5} dot={false} name="7-day avg" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -412,7 +434,7 @@ export default function TrendsPage() {
               <p className="py-8 text-center text-zinc-500 text-sm">No data</p>
             ) : (
               <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={chartData.map(d => ({ ...d, sugarLimit: recommendations.addedSugarLimit }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <ComposedChart data={trendData.map(d => ({ ...d, sugarLimit: recommendations.addedSugarLimit }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
@@ -420,11 +442,12 @@ export default function TrendsPage() {
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                     labelFormatter={formatTooltipLabel}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(value: any, name: any) => [Math.round(value || 0) + 'g', name]}
+                    formatter={(value: any, name: any) => [value == null ? '—' : Math.round(value as number) + 'g', name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
                   <Line type="monotone" dataKey="sugarLimit" stroke="#831843" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Limit" connectNulls />
-                  <Line type="monotone" dataKey="addedSugar" stroke="#ec4899" strokeWidth={2} dot={{ r: 2 }} name="Consumed" connectNulls />
+                  <Line type="monotone" dataKey="addedSugar" stroke="#f9a8d4" strokeWidth={1.5} dot={{ r: 2 }} name="Consumed" connectNulls />
+                  <Line type="monotone" dataKey="addedSugarAvg7" stroke="#ec4899" strokeWidth={2.5} dot={false} name="7-day avg" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -440,7 +463,7 @@ export default function TrendsPage() {
               <p className="py-8 text-center text-zinc-500 text-sm">No data</p>
             ) : (
               <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={chartData.map(d => ({ ...d, idealRatio: 1.5, okRatio: 1.0 }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <ComposedChart data={trendData.map(d => ({ ...d, idealRatio: 1.5, okRatio: 1.0 }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={[0, 'auto']} />
@@ -448,15 +471,16 @@ export default function TrendsPage() {
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                     labelFormatter={formatTooltipLabel}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(value: any, name: any) => {
-                      if (name === 'K/Na Ratio') return [value ? (value as number).toFixed(2) + ':1' : '—', name];
-                      return [(value as number).toFixed(1) + ':1', name];
-                    }}
+                    formatter={(value: any, name: any) => [
+                      value == null ? '—' : (value as number).toFixed(2) + ':1',
+                      name,
+                    ]}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
                   <Line type="monotone" dataKey="idealRatio" stroke="#065f46" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Ideal (1.5)" connectNulls />
                   <Line type="monotone" dataKey="okRatio" stroke="#92400e" strokeWidth={1} strokeDasharray="3 3" dot={false} name="OK (1.0)" connectNulls />
-                  <Line type="monotone" dataKey="kNaRatio" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} name="K/Na Ratio" connectNulls />
+                  <Line type="monotone" dataKey="kNaRatio" stroke="#c4b5fd" strokeWidth={1.5} dot={{ r: 2 }} name="K/Na Ratio" connectNulls />
+                  <Line type="monotone" dataKey="kNaRatioAvg7" stroke="#8b5cf6" strokeWidth={2.5} dot={false} name="7-day avg" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -472,7 +496,7 @@ export default function TrendsPage() {
               <p className="py-8 text-center text-zinc-500 text-sm">No data</p>
             ) : (
               <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={chartData.map(d => ({ ...d, fiberTarget: recommendations.fiberTarget }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <ComposedChart data={trendData.map(d => ({ ...d, fiberTarget: recommendations.fiberTarget }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#71717a' }} />
@@ -480,11 +504,12 @@ export default function TrendsPage() {
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                     labelFormatter={formatTooltipLabel}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(value: any, name: any) => [Math.round(value || 0) + 'g', name]}
+                    formatter={(value: any, name: any) => [value == null ? '—' : Math.round(value as number) + 'g', name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
                   <Line type="monotone" dataKey="fiberTarget" stroke="#065f46" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Target" connectNulls />
-                  <Line type="monotone" dataKey="fiber" stroke="#10b981" strokeWidth={2} dot={{ r: 2 }} name="Consumed" connectNulls />
+                  <Line type="monotone" dataKey="fiber" stroke="#6ee7b7" strokeWidth={1.5} dot={{ r: 2 }} name="Consumed" connectNulls />
+                  <Line type="monotone" dataKey="fiberAvg7" stroke="#10b981" strokeWidth={2.5} dot={false} name="7-day avg" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -539,7 +564,10 @@ export default function TrendsPage() {
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                     labelFormatter={formatTooltipLabel}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(value: any, name: any) => [value + ' lbs', name]}
+                    formatter={(value: any, name: any) => [
+                      value == null ? '—' : (value as number).toFixed(1) + ' lbs',
+                      name,
+                    ]}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
                   <Line
@@ -551,7 +579,7 @@ export default function TrendsPage() {
                     name="Daily"
                     connectNulls
                   />
-                  <Line type="monotone" dataKey="avg7" stroke="#0284c7" strokeWidth={2.5} dot={false} name="7-day avg" connectNulls />
+                  <Line type="monotone" dataKey="weightLbsAvg7" stroke="#0284c7" strokeWidth={2.5} dot={false} name="7-day avg" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -567,7 +595,7 @@ export default function TrendsPage() {
               <p className="py-8 text-center text-sm text-zinc-500">No readings in this period</p>
             ) : (
               <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <ComposedChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={['auto', 'auto']} />
@@ -575,11 +603,13 @@ export default function TrendsPage() {
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                     labelFormatter={formatTooltipLabel}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(value: any, name: any) => [Math.round(value || 0) + ' mmHg', name]}
+                    formatter={(value: any, name: any) => [value == null ? '—' : Math.round(value as number) + ' mmHg', name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
-                  <Line type="monotone" dataKey="bpSystolic" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} name="Systolic" connectNulls />
-                  <Line type="monotone" dataKey="bpDiastolic" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} name="Diastolic" connectNulls />
+                  <Line type="monotone" dataKey="bpSystolic" stroke="#fca5a5" strokeWidth={1.5} dot={{ r: 2 }} name="Systolic" connectNulls />
+                  <Line type="monotone" dataKey="bpSystolicAvg7" stroke="#ef4444" strokeWidth={2.5} dot={false} name="Sys avg" connectNulls />
+                  <Line type="monotone" dataKey="bpDiastolic" stroke="#93c5fd" strokeWidth={1.5} dot={{ r: 2 }} name="Diastolic" connectNulls />
+                  <Line type="monotone" dataKey="bpDiastolicAvg7" stroke="#3b82f6" strokeWidth={2.5} dot={false} name="Dia avg" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
             )}
@@ -758,19 +788,38 @@ export default function TrendsPage() {
 const DAY_MS = 86_400_000;
 const dateMs = (d: string) => new Date(d + 'T12:00:00').getTime();
 
+/** Suffix for the trailing-average companion of a series, e.g. `protein` → `proteinAvg7`. */
+const AVG_SUFFIX = 'Avg7';
+
 /**
- * 7-day trailing average, windowed by calendar date rather than by the previous
- * 7 logged points — so a gap in weigh-ins widens the gap instead of silently
- * averaging in readings from two weeks back.
+ * Adds a 7-day trailing average for each named field, windowed by calendar date
+ * rather than by the previous 7 rows — so a gap in logging shortens the window
+ * instead of silently averaging in readings from weeks back. Days where the field
+ * is null are skipped, which keeps sparse series (blood pressure) usable.
+ *
+ * A single reading in the window yields null rather than an "average" that is just
+ * that reading drawn in a heavier stroke — which would show sparse series as a flat
+ * plateau and imply smoothing that never happened.
+ *
+ * Values are left unrounded; each chart's tooltip formatter decides precision.
  */
-function withTrailingAverage(points: WeightPoint[]): (WeightPoint & { avg7: number })[] {
-  return points.map((p, i) => {
-    const cutoff = dateMs(p.date) - 6 * DAY_MS;
+function withTrailingAverages<T extends { date: string }>(
+  points: T[],
+  fields: (keyof T & string)[]
+): (T & Record<string, number | null>)[] {
+  return points.map((point, i) => {
+    const cutoff = dateMs(point.date) - 6 * DAY_MS;
     const window = points.slice(0, i + 1).filter((w) => dateMs(w.date) >= cutoff);
-    return {
-      ...p,
-      avg7: Math.round((window.reduce((sum, w) => sum + w.weightLbs, 0) / window.length) * 10) / 10,
-    };
+
+    const averages: Record<string, number | null> = {};
+    for (const field of fields) {
+      const values = window
+        .map((w) => w[field] as unknown as number | null)
+        .filter((v): v is number => v != null);
+      averages[field + AVG_SUFFIX] =
+        values.length >= 2 ? values.reduce((sum, v) => sum + v, 0) / values.length : null;
+    }
+    return { ...point, ...averages };
   });
 }
 
