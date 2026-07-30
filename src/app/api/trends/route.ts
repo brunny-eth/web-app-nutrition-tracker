@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
   // Get supplement/alcohol checklist for each day
   const { data: checklists } = await supabase
     .from('daily_checklist')
-    .select('resolved_date, supplements_taken, alcohol, weight_kg, bp_systolic, bp_diastolic')
+    .select('resolved_date, supplements_taken, alcohol, bp_systolic, bp_diastolic')
     .eq('user_id', userId)
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr);
@@ -83,13 +83,21 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  // Weight series. Kept separate from chartData because a weigh-in doesn't require
-  // logged food, and unlike calorie totals a morning weight is complete the moment
-  // it's entered — so today counts.
-  const weightData = (checklists ?? [])
-    .filter((c) => c.weight_kg != null)
-    .map((c) => ({ date: c.resolved_date, weightLbs: roundLbs(Number(c.weight_kg)) }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  // Weight series. Deliberately ignores both the selected day range and the
+  // exclude-today rule: a months-long view is the whole point of a weight trend,
+  // it's one number per day so full history is cheap, and a morning weigh-in is
+  // complete the moment it's entered (unlike an accumulating calorie total).
+  const { data: weightRows } = await supabase
+    .from('daily_checklist')
+    .select('resolved_date, weight_kg')
+    .eq('user_id', userId)
+    .not('weight_kg', 'is', null)
+    .order('resolved_date', { ascending: true });
+
+  const weightData = (weightRows ?? []).map((w) => ({
+    date: w.resolved_date,
+    weightLbs: roundLbs(Number(w.weight_kg)),
+  }));
 
   // Supplements taken per day, for folding psyllium's fiber into daily totals.
   const supplementsTakenByDate: Record<string, string[]> = {};

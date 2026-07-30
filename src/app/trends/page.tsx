@@ -491,6 +491,7 @@ export default function TrendsPage() {
             <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-100">
               Weight
             </h2>
+            {/* Full history, so this one ignores the day-range selector above. */}
             <p className="mb-4 text-xs text-zinc-500">
               {latestWeight ? (
                 <>
@@ -499,7 +500,7 @@ export default function TrendsPage() {
                     <span className={weightChange < 0 ? 'text-green-600 dark:text-green-400' : 'text-zinc-500'}>
                       {' · '}
                       {weightChange > 0 ? '+' : ''}
-                      {Math.round(weightChange * 10) / 10} lbs over period
+                      {Math.round(weightChange * 10) / 10} lbs since {formatDate(weightPoints[0].date)}
                     </span>
                   )}
                 </>
@@ -508,12 +509,19 @@ export default function TrendsPage() {
               )}
             </p>
             {weightPoints.length === 0 ? (
-              <p className="py-8 text-center text-sm text-zinc-500">No weigh-ins in this period</p>
+              <p className="py-8 text-center text-sm text-zinc-500">No weigh-ins logged yet</p>
             ) : (
               <ResponsiveContainer width="100%" height={170}>
                 <ComposedChart data={weightSeries} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
-                  <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
+                  {/* Months of daily points, so let recharts thin the tick labels. */}
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={formatDate}
+                    tick={{ fontSize: 10, fill: '#71717a' }}
+                    minTickGap={24}
+                    interval="preserveStartEnd"
+                  />
                   <YAxis
                     tick={{ fontSize: 10, fill: '#71717a' }}
                     domain={weightDomain}
@@ -527,7 +535,15 @@ export default function TrendsPage() {
                     formatter={(value: any, name: any) => [value + ' lbs', name]}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
-                  <Line type="monotone" dataKey="weightLbs" stroke="#7dd3fc" strokeWidth={1.5} dot={{ r: 2 }} name="Daily" connectNulls />
+                  <Line
+                    type="monotone"
+                    dataKey="weightLbs"
+                    stroke="#7dd3fc"
+                    strokeWidth={1.5}
+                    dot={weightSeries.length <= 45 ? { r: 2 } : false}
+                    name="Daily"
+                    connectNulls
+                  />
                   <Line type="monotone" dataKey="avg7" stroke="#0284c7" strokeWidth={2.5} dot={false} name="7-day avg" connectNulls />
                 </ComposedChart>
               </ResponsiveContainer>
