@@ -124,3 +124,27 @@ describe('Validation', () => {
     });
   });
 });
+
+describe('Nutrients the edit route actually passes', () => {
+  // The cases above cover grams, which the PATCH route never sends, while the five
+  // fields it does send were untested.
+  const fields = [
+    ['saturated_fat_g', 'Saturated fat'],
+    ['fiber_g', 'Fiber'],
+    ['added_sugar_g', 'Sugar'],
+    ['sodium_mg', 'Sodium'],
+    ['potassium_mg', 'Potassium'],
+  ] as const;
+
+  for (const [field, label] of fields) {
+    it(`rejects negative ${field}`, () => {
+      const result = validateNutritionUpdate({ [field]: -1 });
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe(`${label} cannot be negative`);
+    });
+
+    it(`accepts zero ${field}`, () => {
+      expect(validateNutritionUpdate({ [field]: 0 }).valid).toBe(true);
+    });
+  }
+});

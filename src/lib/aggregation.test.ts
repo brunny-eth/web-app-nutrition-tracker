@@ -132,3 +132,44 @@ describe('Aggregation Math', () => {
     });
   });
 });
+
+describe('Non-macro nutrients', () => {
+  // The tests above only exercise the four macros, but aggregateItems sums nine
+  // nutrients and the dashboard reads all of them.
+  const item = (over: Record<string, number | null> = {}) => ({
+    calories: 100, calories_low: 90, calories_high: 110,
+    protein_g: 10, protein_low: 9, protein_high: 11,
+    carbs_g: 10, carbs_low: 9, carbs_high: 11,
+    fat_g: 5, fat_low: 4, fat_high: 6,
+    saturated_fat_g: 2, saturated_fat_low: 1.8, saturated_fat_high: 2.2,
+    fiber_g: 3, fiber_low: 2.7, fiber_high: 3.3,
+    added_sugar_g: 1, added_sugar_low: 0.9, added_sugar_high: 1.1,
+    sodium_mg: 200, sodium_low: 180, sodium_high: 220,
+    potassium_mg: 300, potassium_low: 270, potassium_high: 330,
+    ...over,
+  });
+
+  it('sums saturated fat, fiber, added sugar, sodium and potassium', () => {
+    const totals = aggregateItems([item(), item()]);
+
+    expect(totals.saturatedFat.value).toBe(4);
+    expect(totals.saturatedFat.low).toBeCloseTo(3.6, 5);
+    expect(totals.fiber.value).toBe(6);
+    expect(totals.addedSugar.value).toBe(2);
+    expect(totals.sodium.value).toBe(400);
+    expect(totals.potassium.value).toBe(600);
+  });
+
+  it('treats a missing nutrient as zero rather than NaN', () => {
+    // Older rows predate these columns and come back null. A bare `+=` would
+    // poison the whole total with NaN and render as an empty card.
+    const totals = aggregateItems([
+      item({ fiber_g: null, fiber_low: null, fiber_high: null, potassium_mg: null }),
+      item(),
+    ]);
+
+    expect(totals.fiber.value).toBe(3);
+    expect(totals.potassium.value).toBe(300);
+    expect(Number.isNaN(totals.fiber.value)).toBe(false);
+  });
+});

@@ -34,14 +34,14 @@ describe('saturatedFatPercentOfCalories', () => {
     expect(saturatedFatPercentOfCalories(5, 0)).toBeNull();
   });
 
-  it('is unaffected by the calorie goal — only by what was eaten', () => {
-    // Same food, different activity level: the percentage does not move.
-    expect(saturatedFatPercentOfCalories(18, 2000)).toEqual(
-      saturatedFatPercentOfCalories(18, 2000)
-    );
-    // Eating more of everything else dilutes the share.
+  it('dilutes as total calories rise for the same saturated fat', () => {
+    // Dropped a `f(x) === f(x)` assertion that used to sit here — it was a
+    // tautology dressed up as a test of goal-independence.
     const light = saturatedFatPercentOfCalories(18, 1600)!;
     const heavy = saturatedFatPercentOfCalories(18, 2600)!;
+
+    expect(light).toBeCloseTo(10.13, 1);
+    expect(heavy).toBeCloseTo(6.23, 1);
     expect(heavy).toBeLessThan(light);
   });
 });

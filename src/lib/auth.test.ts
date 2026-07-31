@@ -40,13 +40,13 @@ describe('Password hashing', () => {
 });
 
 describe('Session tokens', () => {
-  it('should encode user ID in session token', () => {
+  it('should encode the user ID in the token payload', () => {
+    // Previously asserted only that a non-empty string came back, which the next
+    // test already covers — nothing checked the user ID was actually in there.
     const userId = 'user-123-abc';
     const token = createSessionToken(userId);
-    
-    expect(token).toBeTruthy();
-    expect(typeof token).toBe('string');
-    expect(token.length).toBeGreaterThan(0);
+
+    expect(Buffer.from(token, 'base64').toString('utf-8')).toContain(userId);
   });
 
   it('should extract user ID from valid token', () => {
@@ -96,15 +96,31 @@ describe('Multi-user isolation', () => {
     expect(parseSessionToken(token2)).toBe(user2Id);
   });
 
-  it('should not allow cross-user token parsing', () => {
-    const user1Id = 'user-1';
-    const user2Id = 'user-2';
-    
-    const token1 = createSessionToken(user1Id);
-    
-    // Token 1 should only extract user1's ID
-    const extractedId = parseSessionToken(token1);
-    expect(extractedId).toBe(user1Id);
-    expect(extractedId).not.toBe(user2Id);
+  /**
+   * This replaces a test called "should not allow cross-user token parsing", which
+   * asserted a property the code does not have. It only ever re-parsed user1's own
+   * token, so it passed while implying forgery was prevented.
+   *
+   * A session token is `base64(userId:random)` with no signature, so it is an
+   * unsigned *claim* about identity rather than proof of it: anyone who knows a
+   * user's ID can mint a token for them, and parseSessionToken will accept it.
+   * Documented here rather than hidden behind a reassuring name.
+   *
+   * Practical exposure today is limited — single account, and the cookie is
+   * httpOnly + secure + sameSite=lax — but this is the thing to fix before a
+   * second user exists. The fix is an HMAC over the payload using a server secret,
+   * verified in parseSessionToken.
+   */
+  it('accepts any well-formed token — tokens are unsigned claims, not proofs', () => {
+    const forged = Buffer.from('somebody-elses-user-id:anything').toString('base64');
+
+    expect(parseSessionToken(forged)).toBe('somebody-elses-user-id');
+  });
+
+  it('rejects tokens that are not valid base64 payloads', () => {
+    expect(parseSessionToken('')).toBe(null);
+    expect(parseSessionToken('short')).toBe(null);
+    // Decodes, but has no `userId:random` separator.
+    expect(parseSessionToken(Buffer.from('no-separator-here').toString('base64'))).toBe(null);
   });
 });

@@ -6,10 +6,13 @@ describe('resolveActivityMultiplier', () => {
     expect(resolveActivityMultiplier({ multiplier: 1.68, activity_level_id: null })).toBe(1.68);
   });
 
-  it('does not fall back to moderate for a newer row, which was the bug', () => {
+  it('reads the stored multiplier when the legacy level is null, which was the bug', () => {
     // Newer rows leave activity_level_id null; reading only that column scored
-    // every such day as moderate and understated the deficit.
+    // every such day as moderate and understated the deficit. Asserted positively —
+    // this used to be `not.toBe(FALLBACK)`, which would also pass on 0 or NaN.
     const row = { multiplier: 1.72, activity_level_id: null };
+
+    expect(resolveActivityMultiplier(row)).toBe(1.72);
     expect(resolveActivityMultiplier(row)).not.toBe(FALLBACK_ACTIVITY_MULTIPLIER);
   });
 

@@ -111,10 +111,26 @@ describeIfApiKey('Known Meals Regression (requires ANTHROPIC_API_KEY)', () => {
     it(
       'accounts for cooking fat when it is not specified',
       async () => {
-        const result = await parseMealDescription('fried eggs', today);
-        const totalFat = sumMetric(result.items, 'fat_g');
-        // Plain eggs are ~10g fat for two; frying should push this higher.
-        expect(totalFat).toBeGreaterThan(8);
+        // Tested against a control rather than a fixed threshold. The old version
+        // asserted fat > 8g for "fried eggs", but two eggs carry ~9.5g of fat before
+        // any oil, so it passed whether or not cooking fat was added — it couldn't
+        // detect the thing it was named after. The egg count was also unspecified.
+        const [boiled, fried] = await Promise.all([
+          parseMealDescription('2 boiled eggs', today),
+          parseMealDescription('2 fried eggs', today),
+        ]);
+
+        const boiledFat = sumMetric(boiled.items, 'fat_g');
+        const friedFat = sumMetric(fried.items, 'fat_g');
+
+        // Boiling adds nothing, so this is the eggs' own fat.
+        expect(boiledFat).toBeGreaterThan(7);
+        expect(boiledFat).toBeLessThan(13);
+        // Frying should add a couple of grams at minimum.
+        expect(
+          friedFat,
+          `fried ${friedFat.toFixed(1)}g vs boiled ${boiledFat.toFixed(1)}g — no cooking fat added`
+        ).toBeGreaterThan(boiledFat + 2);
       },
       API_TIMEOUT
     );
