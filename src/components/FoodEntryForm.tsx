@@ -20,6 +20,19 @@ interface RecentMeal {
   text: string;
 }
 
+interface AttachedImage {
+  /** Compressed data URL. */
+  dataUrl: string;
+  name: string;
+}
+
+/**
+ * Each compressed image is ~200-500KB, and base64 inflates that by a third inside a
+ * JSON body. Capped so a multi-page recipe can't exceed the serverless request
+ * body limit, which would fail as an opaque network error.
+ */
+const MAX_BATCH_IMAGES = 4;
+
 const RECENT_LABEL_MAX_CHARS = 80;
 
 /**
@@ -38,6 +51,8 @@ interface FoodEntryFormProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
   onEntryCreated: () => void;
+  /** A saved batch isn't food eaten, so it refreshes the batch list, not the day. */
+  onBatchCreated: () => void;
   today: string;
   yesterday: string;
 }
@@ -46,12 +61,17 @@ export function FoodEntryForm({
   selectedDate,
   onDateChange,
   onEntryCreated,
+  onBatchCreated,
   today,
   yesterday,
 }: FoodEntryFormProps) {
   const [text, setText] = useState('');
-  const [image, setImage] = useState<string | null>(null);
-  const [imageName, setImageName] = useState<string>('');
+  // An array because a recipe often spans several screenshots. The meal path still
+  // sends only the first; multi-image is what batch parsing needs.
+  const [images, setImages] = useState<AttachedImage[]>([]);
+  const [isBatch, setIsBatch] = useState(false);
+  const [batchTotal, setBatchTotal] = useState('');
+  const [batchUnit, setBatchUnit] = useState('cups');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -134,9 +154,11 @@ export function FoodEntryForm({
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      // Max dimensions (good enough for reading nutrition labels)
-      const MAX_WIDTH = 1500;
-      const MAX_HEIGHT = 1500;
+      // Recipe screenshots are dense text, so they get more pixels to stay legible
+      // than a nutrition label needs.
+      const MAX_DIMENSION = isBatch ? 2000 : 1500;
+      const MAX_WIDTH = MAX_DIMENSION;
+      const MAX_HEIGHT = MAX_DIMENSION;
       
       let { width, height } = img;
       
@@ -154,8 +176,11 @@ export function FoodEntryForm({
       // Convert to JPEG with 85% quality (good balance of size vs quality)
       const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
       
-      setImage(compressedBase64);
-      setImageName(file.name);
+      // Batch mode collects pages of one recipe; meal mode holds a single label.
+      setImages((prev) =>
+        isBatch ? [...prev, { dataUrl: compressedBase64, name: file.name }].slice(0, MAX_BATCH_IMAGES)
+                : [{ dataUrl: compressedBase64, name: file.name }]
+      );
       setError('');
     };
     
@@ -169,17 +194,17 @@ export function FoodEntryForm({
       img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [isBatch]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     
-    const file = e.dataTransfer.files[0];
-    if (file) {
+    for (const file of Array.from(e.dataTransfer.files)) {
       handleImageFile(file);
+      if (!isBatch) break; // meal mode holds one image
     }
-  }, [handleImageFile]);
+  }, [handleImageFile, isBatch]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -192,34 +217,65 @@ export function FoodEntryForm({
   }, []);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    for (const file of Array.from(e.target.files ?? [])) {
       handleImageFile(file);
+      if (!isBatch) break;
     }
-  }, [handleImageFile]);
+    // Cleared so re-picking the same file still fires a change event.
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [handleImageFile, isBatch]);
 
-  const removeImage = () => {
-    setImage(null);
-    setImageName('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
+
+  const resetForm = () => {
+    setText('');
+    setImages([]);
+    setBatchTotal('');
+  };
+
+  // Batch mode additionally needs a yield — without it there's nothing to divide by.
+  const hasInput = Boolean(text.trim() || images.length > 0);
+  const batchTotalValid = Number(batchTotal) > 0;
+  const canSubmit = isBatch ? hasInput && batchTotalValid : hasInput;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!text.trim() && !image) || loading) return;
+    if (!canSubmit || loading) return;
 
     setError('');
     setLoading(true);
 
     try {
+      if (isBatch) {
+        // A batch is a source to log portions from, so this deliberately adds
+        // nothing to today's totals — hence onBatchCreated, not onEntryCreated.
+        const res = await fetch('/api/batches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: text.trim(),
+            images: images.map((img) => img.dataUrl),
+            total_amount: Number(batchTotal),
+            unit: batchUnit.trim() || 'cups',
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to save batch');
+        }
+        resetForm();
+        onBatchCreated();
+        return;
+      }
+
       const res = await fetch('/api/entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          raw_text: text.trim() || (image ? IMAGE_ONLY_TEXT : ''),
-          image: image || undefined,
+          raw_text: text.trim() || (images.length > 0 ? IMAGE_ONLY_TEXT : ''),
+          image: images[0]?.dataUrl,
           client_timestamp: new Date().toISOString(),
           override_date: selectedDate !== today ? selectedDate : undefined,
         }),
@@ -230,18 +286,15 @@ export function FoodEntryForm({
         throw new Error(data.error || 'Failed to log food');
       }
 
-      setText('');
-      setImage(null);
-      setImageName('');
+      resetForm();
       onEntryCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to log food');
+      setError(err instanceof Error ? err.message : isBatch ? 'Failed to save batch' : 'Failed to log food');
     } finally {
       setLoading(false);
     }
   };
 
-  const canSubmit = text.trim() || image;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
@@ -260,9 +313,12 @@ export function FoodEntryForm({
           ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={image 
-            ? "Add details (optional) - e.g., '2 servings' or 'half portion'"
-            : "Log food here via text or a photo of nutrition facts/menu. The more details you include, the better. You can do 1 big message daily or split up for each meal."
+          placeholder={
+            isBatch
+              ? "Paste or describe the recipe, and note anything you changed — e.g. 'used 2 lb ground beef instead of 1'. Recipe photos work too."
+              : images.length > 0
+                ? "Add details (optional) - e.g., '2 servings' or 'half portion'"
+                : "Log food here via text or a photo of nutrition facts/menu. The more details you include, the better. You can do 1 big message daily or split up for each meal."
           }
           rows={4}
           className="block w-full resize-none rounded-xl border-0 bg-transparent px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100"
@@ -276,26 +332,81 @@ export function FoodEntryForm({
         )}
       </div>
 
-      {/* Image preview */}
-      {image && (
-        <div className="relative inline-block">
-          <img 
-            src={image} 
-            alt="Preview" 
-            className="h-20 w-auto rounded-lg border border-zinc-200 dark:border-zinc-700"
-          />
-          <button
-            type="button"
-            onClick={removeImage}
-            className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
-          >
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <p className="mt-1 text-xs text-zinc-500 truncate max-w-[150px]">{imageName}</p>
+      {/* Image previews — several in batch mode, since a recipe spans pages */}
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {images.map((img, i) => (
+            <div key={`${img.name}-${i}`} className="relative inline-block">
+              <img
+                src={img.dataUrl}
+                alt={`Attachment ${i + 1}`}
+                className="h-20 w-auto rounded-lg border border-zinc-200 dark:border-zinc-700"
+              />
+              <button
+                type="button"
+                onClick={() => removeImage(i)}
+                aria-label={`Remove ${img.name}`}
+                className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <p className="mt-1 max-w-[150px] truncate text-xs text-zinc-500">{img.name}</p>
+            </div>
+          ))}
         </div>
       )}
+
+      {/* Batch mode */}
+      <div className="rounded-xl border border-zinc-200 px-3 py-2.5 dark:border-zinc-700">
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={isBatch}
+            onChange={(e) => setIsBatch(e.target.checked)}
+            disabled={loading}
+            className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+          />
+          <span className="text-sm text-zinc-700 dark:text-zinc-300">
+            This is a batch I&apos;ll eat over several days
+          </span>
+        </label>
+
+        {isBatch && (
+          <div className="mt-2.5 space-y-2 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">Makes</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.5"
+                min="0"
+                value={batchTotal}
+                onChange={(e) => setBatchTotal(e.target.value)}
+                placeholder="12"
+                aria-label="Total amount this recipe makes"
+                disabled={loading}
+                className="w-20 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-center text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+              <input
+                type="text"
+                value={batchUnit}
+                onChange={(e) => setBatchUnit(e.target.value)}
+                aria-label="Unit"
+                disabled={loading}
+                className="w-24 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+              <span className="text-xs text-zinc-400">total</span>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Nothing gets added to today. Attach the recipe (photos of it are fine, up to{' '}
+              {MAX_BATCH_IMAGES}) and note any changes you made — &quot;used 2 lb beef instead of
+              1&quot;. Then log portions from it each time you eat.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Action buttons row */}
       <div className="flex gap-2">
@@ -304,6 +415,7 @@ export function FoodEntryForm({
           ref={fileInputRef}
           type="file"
           accept="image/*"
+          multiple={isBatch}
           onChange={handleFileSelect}
           className="hidden"
         />
@@ -312,7 +424,7 @@ export function FoodEntryForm({
           onClick={() => fileInputRef.current?.click()}
           disabled={loading}
           className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          title="Add photo of nutrition facts or menu"
+          title={isBatch ? 'Add photos of the recipe' : 'Add photo of nutrition facts or menu'}
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -377,16 +489,18 @@ export function FoodEntryForm({
           {loading ? (
             <>
               <LoadingSpinner />
-              Parsing...
+              {isBatch ? 'Reading recipe…' : 'Parsing...'}
             </>
+          ) : isBatch ? (
+            'Save Batch'
           ) : (
             'Log Food'
           )}
         </button>
       </div>
 
-      {/* Date selector */}
-      <div className="flex items-center gap-2">
+      {/* Date selector — hidden for batches, which aren't eaten on a date */}
+      <div className={`flex items-center gap-2 ${isBatch ? 'hidden' : ''}`}>
         <span className="text-sm text-zinc-500 dark:text-zinc-400">Log for:</span>
         <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
           <button
