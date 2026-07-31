@@ -1,12 +1,12 @@
 /**
- * Scaling a stored batch into a logged portion.
+ * Scaling a saved meal's stored serving into a logged entry.
  *
- * This is the whole point of batches: the numbers are parsed once and every portion
- * afterwards is arithmetic, so eating the same 2 cups on Monday and Thursday gives
- * byte-identical nutrition. No model call, no drift.
+ * This is the whole point: one serving is parsed once and every log afterwards is
+ * arithmetic, so the same meal on Monday and Thursday gives byte-identical
+ * nutrition. No model call, no drift.
  */
 
-/** Every numeric nutrition column on batch_items / entry_items, value and bounds. */
+/** Every numeric nutrition column on saved_meal_items / entry_items, value and bounds. */
 const SCALED_FIELDS = [
   'grams', 'grams_low', 'grams_high',
   'calories', 'calories_low', 'calories_high',
@@ -20,20 +20,21 @@ const SCALED_FIELDS = [
   'potassium_mg', 'potassium_low', 'potassium_high',
 ] as const;
 
-export type BatchItemRow = Record<string, unknown> & {
+export type SavedMealItemRow = Record<string, unknown> & {
   food_name: string;
   assumptions?: unknown;
 };
 
 /**
- * Turn batch items into entry_items rows for `entryId`, scaled by `fraction`.
+ * Turn one serving's items into entry_items rows for `entryId`, multiplied by the
+ * number of servings eaten. 1 serving passes them through unchanged; 2.5 scales them.
  *
  * Supabase returns DECIMAL columns as strings in some driver versions, so every
  * value goes through Number() rather than being trusted as numeric.
  */
-export function scaleBatchItems(
-  items: BatchItemRow[],
-  fraction: number,
+export function scaleServings(
+  items: SavedMealItemRow[],
+  servings: number,
   entryId: string
 ): Array<Record<string, unknown>> {
   return items.map((item) => {
@@ -50,7 +51,7 @@ export function scaleBatchItems(
         row[field] = null;
         continue;
       }
-      row[field] = round2(Number(raw) * fraction);
+      row[field] = round2(Number(raw) * servings);
     }
 
     // Derived on write, same as the meal path — the columns are NOT NULL.

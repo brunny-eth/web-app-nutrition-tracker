@@ -59,25 +59,33 @@ export const ParsedMealSchema = z.object({
 export type ParsedMeal = z.infer<typeof ParsedMealSchema>;
 
 /**
- * A whole cooked recipe, parsed once and then eaten from over several days.
- * No explicit_date: a batch isn't eaten at a point in time, the portions are.
+ * A meal eaten often, parsed once into ONE SERVING. Logging it multiplies the
+ * stored items by the number of servings eaten.
+ *
+ * No explicit_date: a saved meal isn't eaten at a point in time, its servings are.
  */
-export const ParsedRecipeSchema = z.object({
+export const ParsedSavedMealSchema = z.object({
   name: z.string().describe(
-    'Short label for this batch, 2-5 words, e.g. "Lentil beef slop". Plain and '
-    + 'recognizable rather than a full recipe title.'
+    'Short label, 2-5 words, e.g. "Lentil beef slop" or "Morning protein shake". '
+    + 'Plain and recognizable rather than a full recipe title.'
+  ),
+  serving_description: z.string().describe(
+    'Exactly what ONE serving is, in amounts the user can reproduce with a measuring '
+    + 'cup or scoop. One or two sentences. Must stand alone: say "about 2/3 cup rice '
+    + 'with 2/3 cup of the beef and lentil mix" rather than "one sixth of the recipe", '
+    + 'since the user is scooping a bowl, not dividing a pot.'
   ),
   items: z.array(FoodItemSchema).describe(
-    'Every ingredient, with amounts for the ENTIRE batch — not per serving.'
+    'The ingredients of ONE serving — not the whole recipe.'
   ),
   rejection_reason: z.string().nullable().describe(
-    'Set this when no recipe or ingredient list can be identified from the images '
+    'Set this when no meal or ingredient list can be identified from the images '
     + 'and description. Explain why in one sentence, addressed to the user. '
     + 'Leave null on success.'
   ),
 });
 
-export type ParsedRecipe = z.infer<typeof ParsedRecipeSchema>;
+export type ParsedSavedMeal = z.infer<typeof ParsedSavedMealSchema>;
 
 // Schema for LLM activity estimation response
 export const ActivityEstimateSchema = z.object({

@@ -28,10 +28,10 @@ interface AttachedImage {
 
 /**
  * Each compressed image is ~200-500KB, and base64 inflates that by a third inside a
- * JSON body. Capped so a multi-page recipe can't exceed the serverless request
- * body limit, which would fail as an opaque network error.
+ * JSON body. Capped so a multi-page recipe can't exceed the serverless request body
+ * limit, which would fail as an opaque network error.
  */
-const MAX_BATCH_IMAGES = 4;
+const MAX_RECIPE_IMAGES = 4;
 
 const RECENT_LABEL_MAX_CHARS = 80;
 
@@ -51,8 +51,8 @@ interface FoodEntryFormProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
   onEntryCreated: () => void;
-  /** A saved batch isn't food eaten, so it refreshes the batch list, not the day. */
-  onBatchCreated: () => void;
+  /** A saved meal isn't food eaten, so it refreshes the saved-meal list, not the day. */
+  onSavedMealCreated: () => void;
   today: string;
   yesterday: string;
 }
@@ -61,17 +61,15 @@ export function FoodEntryForm({
   selectedDate,
   onDateChange,
   onEntryCreated,
-  onBatchCreated,
+  onSavedMealCreated,
   today,
   yesterday,
 }: FoodEntryFormProps) {
   const [text, setText] = useState('');
   // An array because a recipe often spans several screenshots. The meal path still
-  // sends only the first; multi-image is what batch parsing needs.
+  // sends only the first; multi-image is what recipe parsing needs.
   const [images, setImages] = useState<AttachedImage[]>([]);
-  const [isBatch, setIsBatch] = useState(false);
-  const [batchTotal, setBatchTotal] = useState('');
-  const [batchUnit, setBatchUnit] = useState('cups');
+  const [isRecurring, setIsRecurring] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -156,7 +154,7 @@ export function FoodEntryForm({
       
       // Recipe screenshots are dense text, so they get more pixels to stay legible
       // than a nutrition label needs.
-      const MAX_DIMENSION = isBatch ? 2000 : 1500;
+      const MAX_DIMENSION = isRecurring ? 2000 : 1500;
       const MAX_WIDTH = MAX_DIMENSION;
       const MAX_HEIGHT = MAX_DIMENSION;
       
@@ -176,10 +174,11 @@ export function FoodEntryForm({
       // Convert to JPEG with 85% quality (good balance of size vs quality)
       const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
       
-      // Batch mode collects pages of one recipe; meal mode holds a single label.
+      // Recurring mode collects pages of one recipe; a normal log holds one label.
       setImages((prev) =>
-        isBatch ? [...prev, { dataUrl: compressedBase64, name: file.name }].slice(0, MAX_BATCH_IMAGES)
-                : [{ dataUrl: compressedBase64, name: file.name }]
+        isRecurring
+          ? [...prev, { dataUrl: compressedBase64, name: file.name }].slice(0, MAX_RECIPE_IMAGES)
+          : [{ dataUrl: compressedBase64, name: file.name }]
       );
       setError('');
     };
@@ -194,7 +193,7 @@ export function FoodEntryForm({
       img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
-  }, [isBatch]);
+  }, [isRecurring]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -202,9 +201,9 @@ export function FoodEntryForm({
     
     for (const file of Array.from(e.dataTransfer.files)) {
       handleImageFile(file);
-      if (!isBatch) break; // meal mode holds one image
+      if (!isRecurring) break; // a normal log holds one image
     }
-  }, [handleImageFile, isBatch]);
+  }, [handleImageFile, isRecurring]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -219,11 +218,11 @@ export function FoodEntryForm({
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     for (const file of Array.from(e.target.files ?? [])) {
       handleImageFile(file);
-      if (!isBatch) break;
+      if (!isRecurring) break;
     }
     // Cleared so re-picking the same file still fires a change event.
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [handleImageFile, isBatch]);
+  }, [handleImageFile, isRecurring]);
 
   const removeImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
@@ -232,13 +231,9 @@ export function FoodEntryForm({
   const resetForm = () => {
     setText('');
     setImages([]);
-    setBatchTotal('');
   };
 
-  // Batch mode additionally needs a yield — without it there's nothing to divide by.
-  const hasInput = Boolean(text.trim() || images.length > 0);
-  const batchTotalValid = Number(batchTotal) > 0;
-  const canSubmit = isBatch ? hasInput && batchTotalValid : hasInput;
+  const canSubmit = Boolean(text.trim() || images.length > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -248,25 +243,23 @@ export function FoodEntryForm({
     setLoading(true);
 
     try {
-      if (isBatch) {
-        // A batch is a source to log portions from, so this deliberately adds
-        // nothing to today's totals — hence onBatchCreated, not onEntryCreated.
-        const res = await fetch('/api/batches', {
+      if (isRecurring) {
+        // A saved meal is something to log servings from, so this deliberately adds
+        // nothing to today's totals — hence onSavedMealCreated, not onEntryCreated.
+        const res = await fetch('/api/saved-meals', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             description: text.trim(),
             images: images.map((img) => img.dataUrl),
-            total_amount: Number(batchTotal),
-            unit: batchUnit.trim() || 'cups',
           }),
         });
         if (!res.ok) {
           const data = await res.json();
-          throw new Error(data.error || 'Failed to save batch');
+          throw new Error(data.error || 'Failed to save meal');
         }
         resetForm();
-        onBatchCreated();
+        onSavedMealCreated();
         return;
       }
 
@@ -289,7 +282,9 @@ export function FoodEntryForm({
       resetForm();
       onEntryCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : isBatch ? 'Failed to save batch' : 'Failed to log food');
+      setError(
+        err instanceof Error ? err.message : isRecurring ? 'Failed to save meal' : 'Failed to log food'
+      );
     } finally {
       setLoading(false);
     }
@@ -314,7 +309,7 @@ export function FoodEntryForm({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={
-            isBatch
+            isRecurring
               ? "Paste or describe the recipe, and note anything you changed — e.g. 'used 2 lb ground beef instead of 1'. Recipe photos work too."
               : images.length > 0
                 ? "Add details (optional) - e.g., '2 servings' or 'half portion'"
@@ -332,7 +327,7 @@ export function FoodEntryForm({
         )}
       </div>
 
-      {/* Image previews — several in batch mode, since a recipe spans pages */}
+      {/* Image previews — several for a recurring meal, since a recipe spans pages */}
       {images.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {images.map((img, i) => (
@@ -358,55 +353,17 @@ export function FoodEntryForm({
         </div>
       )}
 
-      {/* Batch mode */}
-      <div className="rounded-xl border border-zinc-200 px-3 py-2.5 dark:border-zinc-700">
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={isBatch}
-            onChange={(e) => setIsBatch(e.target.checked)}
-            disabled={loading}
-            className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
-          />
-          <span className="text-sm text-zinc-700 dark:text-zinc-300">
-            This is a batch I&apos;ll eat over several days
-          </span>
-        </label>
-
-        {isBatch && (
-          <div className="mt-2.5 space-y-2 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">Makes</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.5"
-                min="0"
-                value={batchTotal}
-                onChange={(e) => setBatchTotal(e.target.value)}
-                placeholder="12"
-                aria-label="Total amount this recipe makes"
-                disabled={loading}
-                className="w-20 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-center text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-              />
-              <input
-                type="text"
-                value={batchUnit}
-                onChange={(e) => setBatchUnit(e.target.value)}
-                aria-label="Unit"
-                disabled={loading}
-                className="w-24 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-              />
-              <span className="text-xs text-zinc-400">total</span>
-            </div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Nothing gets added to today. Attach the recipe (photos of it are fine, up to{' '}
-              {MAX_BATCH_IMAGES}) and note any changes you made — &quot;used 2 lb beef instead of
-              1&quot;. Then log portions from it each time you eat.
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Recurring meal toggle — no yield, no helper copy, just the switch */}
+      <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-zinc-200 px-3 py-2.5 dark:border-zinc-700">
+        <input
+          type="checkbox"
+          checked={isRecurring}
+          onChange={(e) => setIsRecurring(e.target.checked)}
+          disabled={loading}
+          className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+        />
+        <span className="text-sm text-zinc-700 dark:text-zinc-300">This is a recurring meal</span>
+      </label>
 
       {/* Action buttons row */}
       <div className="flex gap-2">
@@ -415,7 +372,7 @@ export function FoodEntryForm({
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          multiple={isBatch}
+          multiple={isRecurring}
           onChange={handleFileSelect}
           className="hidden"
         />
@@ -424,7 +381,7 @@ export function FoodEntryForm({
           onClick={() => fileInputRef.current?.click()}
           disabled={loading}
           className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          title={isBatch ? 'Add photos of the recipe' : 'Add photo of nutrition facts or menu'}
+          title={isRecurring ? 'Add photos of the recipe' : 'Add photo of nutrition facts or menu'}
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -489,18 +446,18 @@ export function FoodEntryForm({
           {loading ? (
             <>
               <LoadingSpinner />
-              {isBatch ? 'Reading recipe…' : 'Parsing...'}
+              {isRecurring ? 'Saving…' : 'Parsing...'}
             </>
-          ) : isBatch ? (
-            'Save Batch'
+          ) : isRecurring ? (
+            'Save this meal for frequent use'
           ) : (
             'Log Food'
           )}
         </button>
       </div>
 
-      {/* Date selector — hidden for batches, which aren't eaten on a date */}
-      <div className={`flex items-center gap-2 ${isBatch ? 'hidden' : ''}`}>
+      {/* Date selector — hidden for a saved meal, which isn't eaten on a date */}
+      <div className={`flex items-center gap-2 ${isRecurring ? 'hidden' : ''}`}>
         <span className="text-sm text-zinc-500 dark:text-zinc-400">Log for:</span>
         <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
           <button

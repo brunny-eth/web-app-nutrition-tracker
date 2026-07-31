@@ -10,7 +10,7 @@ import { ActivitySelector, type ActivityData } from '@/components/ActivitySelect
 import { DailyChecklist, type ChecklistData } from '@/components/DailyChecklist';
 import { proteinTargetGrams, resolveActivityMultiplier } from '@/lib/tdee';
 import { aggregateItems } from '@/lib/aggregation';
-import { BatchList, type Batch } from '@/components/BatchList';
+import { SavedMealList, type SavedMeal } from '@/components/SavedMealList';
 import { supplementFiberBonus } from '@/lib/supplements';
 import type { Supplement } from '@/types/database';
 
@@ -83,7 +83,7 @@ export default function Home() {
   const [activityData, setActivityData] = useState<ActivityData | null>(null);
   const [checklist, setChecklist] = useState<ChecklistData>({ supplements_taken: [], alcohol: false, weight_kg: null, bp_systolic: null, bp_diastolic: null });
   const [loadingEntries, setLoadingEntries] = useState(false);
-  const [batches, setBatches] = useState<Batch[]>([]);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
 
   // Check auth status on mount
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function Home() {
       fetchEntries();
       fetchActivity();
       fetchChecklist();
-      fetchBatches();
+      fetchSavedMeals();
     }
   }, [selectedDate, authStatus?.authenticated]);
 
@@ -129,15 +129,15 @@ export default function Home() {
     }
   };
 
-  // Batches aren't date-scoped — they persist until finished or removed.
-  const fetchBatches = async () => {
+  // Saved meals aren't date-scoped — they persist until removed.
+  const fetchSavedMeals = async () => {
     try {
-      const res = await fetch('/api/batches');
+      const res = await fetch('/api/saved-meals');
       if (!res.ok) return;
       const data = await res.json();
-      setBatches(data.batches || []);
+      setSavedMeals(data.saved_meals || []);
     } catch (error) {
-      console.error('Failed to fetch batches:', error);
+      console.error('Failed to fetch saved meals:', error);
     }
   };
 
@@ -207,8 +207,7 @@ export default function Home() {
 
   const handleEntryDeleted = (id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
-    // If it was a batch portion, that amount is available again.
-    fetchBatches();
+
   };
 
   // Calculate totals from entries
@@ -324,21 +323,18 @@ export default function Home() {
               selectedDate={selectedDate}
               onDateChange={setSelectedDate}
               onEntryCreated={fetchEntries}
-              onBatchCreated={fetchBatches}
+              onSavedMealCreated={fetchSavedMeals}
               today={today}
               yesterday={yesterday}
             />
           </section>
 
-          <BatchList
-            batches={batches}
+          <SavedMealList
+            savedMeals={savedMeals}
             selectedDate={selectedDate}
             today={today}
-            onPortionLogged={() => {
-              fetchEntries();
-              fetchBatches();
-            }}
-            onBatchArchived={fetchBatches}
+            onLogged={fetchEntries}
+            onRemoved={fetchSavedMeals}
           />
 
           {/* Activity Selector */}

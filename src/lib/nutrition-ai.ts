@@ -6,8 +6,8 @@ import {
   ActivityEstimateSchema,
   type ActivityEstimate,
   type FoodItem,
-  ParsedRecipeSchema,
-  type ParsedRecipe,
+  ParsedSavedMealSchema,
+  type ParsedSavedMeal,
   IMAGE_ONLY_TEXT,
 } from '@/types/nutrition';
 
@@ -220,59 +220,67 @@ export async function parseMealDescription(
 }
 
 /**
- * Separate from SYSTEM_PROMPT because four of its rules are actively wrong for a
- * recipe: recipe images would be rejected as invalid, overlapping screenshots would
- * double-count, a "nutrition per serving" panel would be mistaken for the batch
- * total, and unlisted cooking fat would be added on top of the oil the recipe
- * already calls for.
+ * Separate from SYSTEM_PROMPT because several of its rules are actively wrong here:
+ * recipe images would be rejected as invalid input, overlapping screenshots would
+ * double-count ingredients, a "nutrition per serving" panel would be trusted over
+ * the ingredient list, and unlisted cooking fat would be added on top of the oil the
+ * recipe already calls for.
  */
-const RECIPE_SYSTEM_PROMPT = `You are a nutrition analysis assistant. Your job is to read a recipe — from images, a written description, or both — and return the total nutritional content of the ENTIRE batch as it was actually cooked.
+const SAVED_MEAL_SYSTEM_PROMPT = `You are a nutrition analysis assistant. The user is saving a meal they eat often so they can log it repeatedly without re-describing it. Your job is to return the nutrition of ONE SERVING, plus a description of exactly what one serving is.
 
-WHAT YOU ARE ESTIMATING:
-- The total for the whole batch, NOT one serving. If the recipe yields a pot of food, you are costing the entire pot.
-- The user eats this over several days in measured portions, so the total is what matters. Do not divide by a serving count.
+WHAT ONE SERVING MEANS:
+- The input arrives in one of two shapes. Work out which, and say what you decided in the assumptions.
+  (a) ALREADY ONE SERVING — a shake, a bowl, a plate. "1 cup milk, 2 scoops whey, 3 tbsp greek yogurt, half a cup of berries" is one serving as written. Return it as-is. Do not scale it.
+  (b) A FULL RECIPE that yields many portions — a pot of stew, a tray of something. Work out roughly what the whole recipe yields, choose a sensible single serving, and return ONE serving's nutrition. A normal adult main-course serving, not a tasting portion and not a third of the pot.
+- When in doubt between the two, assume (a). A user describing a shake is not describing a batch.
+
+THE SERVING DESCRIPTION:
+- State precisely what one serving is, in amounts the user can reproduce with a measuring cup, a scoop, or a spoon. One or two sentences.
+- It must stand alone. "About 2/3 cup cooked rice with 2/3 cup of the beef and lentil mix" is usable. "One sixth of the recipe" is not — the user is scooping a bowl, not dividing a pot.
+- For an already-single-serving meal, restate its components: "One full shake: 1 cup whole milk, 2 scoops whey, 3 tbsp greek yogurt, 1/2 cup blueberries."
+- Give proportions when a serving combines components, so it can be assembled by eye next time.
 
 READING THE INPUT:
 1. NEVER ask clarifying questions. Make reasonable assumptions and list them.
-2. The user's written description OVERRIDES the recipe images wherever they disagree. If the recipe says 1 lb ground beef and the user says they used 2 lb, use 2 lb. If they say they skipped an ingredient, omit it. If they say they doubled it, double everything.
+2. The user's written description OVERRIDES the recipe images wherever they disagree. If the recipe says 1 lb ground beef and the user says they used 2 lb, use 2 lb. If they say they skipped an ingredient, omit it.
 3. Multiple images are usually pages, scroll positions, or crops of the SAME recipe, and they often overlap. Merge them into one ingredient list and count each ingredient EXACTLY ONCE. Never sum the same ingredient twice because it appeared in two images.
-4. IGNORE any "Nutrition Facts" or "per serving" panel printed on the recipe. It describes a serving of the original recipe, not this batch, and the user has likely modified the quantities. Always compute from the ingredient list itself.
+4. IGNORE any "Nutrition Facts" or "per serving" panel printed on the recipe. It describes the original recipe's serving, and the user has likely modified the quantities. Always compute from the ingredient list itself.
 5. Ignore non-ingredient content: instructions, prep steps, commentary, ads, comments.
-6. Use ingredient amounts as written. For a range ("1-2 tbsp"), use the midpoint. For "to taste", use a small typical amount and note it.
+6. Use amounts as written. For a range ("1-2 tbsp"), use the midpoint. For "to taste", use a small typical amount and note it.
 
 NUTRITIONAL DATA:
 - Use standard USDA values as baseline.
-- Adjust for preparation method where the recipe specifies it (frying, roasting in oil, draining fat).
-- Include ONLY the fats the recipe lists or the user mentions. Do NOT add cooking oil that isn't specified — a recipe already accounts for its own fat, and adding more double-counts it.
+- Adjust for preparation method where it is specified (frying, roasting in oil, draining fat).
+- Include ONLY the fats listed or mentioned. Do NOT add cooking oil that isn't specified — a recipe already accounts for its own fat, and adding more double-counts it.
 - If the recipe says to drain rendered fat, reduce the fat accordingly and note it.
 - saturated_fat must never exceed total fat.
-- Dry vs cooked matters: use the state the recipe specifies. "1 cup dry lentils" is roughly triple the nutrition of "1 cup cooked lentils". State which you assumed.
-- ADDED SUGAR: Only sugars added during processing/cooking, NOT natural sugars from whole fruits, plain dairy, or vegetables. Honey, syrup, and table sugar in a recipe are added sugar.
+- Dry vs cooked matters: use the state specified. "1 cup dry lentils" is roughly triple "1 cup cooked lentils". State which you assumed.
+- ADDED SUGAR: Only sugars added during processing/cooking, NOT natural sugars from whole fruits, plain dairy, or vegetables. Honey, syrup, and table sugar are added sugar.
 - POTASSIUM: Include potassium in mg. Good sources include potatoes (~900mg each), beans and lentils, spinach, tomatoes, bananas (~400mg).
 
 ITEMIZE PER INGREDIENT:
-- Return one item per ingredient, with its batch quantity — "2 lb ground beef, 90/10", "1.5 cups dry brown lentils".
-- Do NOT collapse the recipe into a single dish. The user needs to see where the calories sit and correct a single ingredient without redoing the whole batch.
+- Return one item per ingredient, at ONE SERVING's quantity.
+- Do NOT collapse the meal into a single item. The user needs to see where the calories sit and correct one ingredient without redoing the whole thing.
 - Combine only genuinely trivial items (a pinch of several spices can be one "spices" line).
 
 CONFIDENCE RANGES:
-- Provide tight intervals when quantities are explicit: low = estimate × 0.9, high = estimate × 1.1.
-- Widen to ±20% for ingredients whose amount you had to guess.
+- Tight intervals when quantities are explicit: low = estimate x 0.9, high = estimate x 1.1.
+- Widen to ±20% for anything whose amount you had to guess, including the serving size itself when you had to choose it.
 
 ASSUMPTIONS:
-- List what you assumed, especially: dry vs cooked state, unspecified quantities, whether fat was drained, and anything you took from the description over the images.
+- List what you assumed, especially: whether you treated the input as one serving or as a recipe you divided, dry vs cooked state, unspecified quantities, and anything taken from the description over the images.
 
-IF THERE IS NO RECIPE:
-- If the images and description contain no identifiable recipe or ingredient list, return an empty items list and set rejection_reason explaining what you'd need.`;
+IF THERE IS NO MEAL:
+- If the images and description contain no identifiable meal or ingredient list, return an empty items list and set rejection_reason explaining what you'd need.`;
 
-export async function parseRecipeBatch(
+export async function parseSavedMeal(
   description: string,
   imagesBase64: string[] = []
-): Promise<ParsedRecipe> {
+): Promise<ParsedSavedMeal> {
   const userContent: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = [];
 
   // Images first, then the description — so the description reads as instructions
-  // about the images it follows, which is also the order rule 2 depends on.
+  // about the images it follows, which is the order rule 2 depends on.
   imagesBase64.forEach((dataUrl, i) => {
     const block = toImageBlock(dataUrl);
     if (!block) return;
@@ -289,23 +297,23 @@ export async function parseRecipeBatch(
     userContent.push({
       type: 'text',
       text:
-        `The images above are one recipe. My notes on how I actually cooked it — these `
-        + `take priority over the images:\n\n"${trimmed}"\n\n`
-        + `Give me the total for the whole batch, itemized per ingredient.`,
+        `The images above are one meal or recipe. My notes on how I actually made it — `
+        + `these take priority over the images:\n\n"${trimmed}"\n\n`
+        + `Give me one serving, itemized, and tell me exactly what one serving is.`,
     });
   } else if (hasImages) {
     userContent.push({
       type: 'text',
       text:
-        'The images above are one recipe, cooked as written. Give me the total for the '
-        + 'whole batch, itemized per ingredient.',
+        'The images above are one meal or recipe, made as written. Give me one serving, '
+        + 'itemized, and tell me exactly what one serving is.',
     });
   } else {
     userContent.push({
       type: 'text',
       text:
-        `Here is a recipe I cooked. Give me the total for the whole batch, itemized `
-        + `per ingredient:\n\n"${trimmed}"`,
+        `Here is a meal I eat often. Give me one serving, itemized, and tell me exactly `
+        + `what one serving is:\n\n"${trimmed}"`,
     });
   }
 
@@ -315,18 +323,18 @@ export async function parseRecipeBatch(
     thinking: THINKING,
     system: [{
       type: 'text',
-      text: RECIPE_SYSTEM_PROMPT,
+      text: SAVED_MEAL_SYSTEM_PROMPT,
       cache_control: { type: 'ephemeral' },
     }],
     messages: [{ role: 'user', content: userContent }],
     tools: [{
-      name: 'parse_recipe',
-      description: 'Return the total nutritional content of an entire cooked recipe',
+      name: 'save_meal',
+      description: 'Return one serving of a frequently eaten meal, and what a serving is',
       strict: true,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      input_schema: z.toJSONSchema(ParsedRecipeSchema) as any,
+      input_schema: z.toJSONSchema(ParsedSavedMealSchema) as any,
     }],
-    tool_choice: { type: 'tool', name: 'parse_recipe' },
+    tool_choice: { type: 'tool', name: 'save_meal' },
   });
 
   const toolUse = response.content.find(
@@ -334,10 +342,10 @@ export async function parseRecipeBatch(
   );
 
   if (!toolUse) {
-    throw new Error('Failed to parse recipe');
+    throw new Error('Failed to parse meal');
   }
 
-  const parsed = ParsedRecipeSchema.parse(toolUse.input);
+  const parsed = ParsedSavedMealSchema.parse(toolUse.input);
 
   if (parsed.rejection_reason) {
     throw new MealRejectedError(parsed.rejection_reason);
