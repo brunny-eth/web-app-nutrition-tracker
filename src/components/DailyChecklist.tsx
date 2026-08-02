@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { Supplement } from '@/types/database';
+import { CollapsibleCard } from './CollapsibleCard';
 import { lbsToKg, roundLbs } from '@/lib/units';
 
 export interface ChecklistData {
@@ -110,15 +111,22 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
     supplements.some((s) => s.id === id)
   ).length;
 
+  // Surfaced in the collapsed header so the card can stay shut without hiding
+  // whether anything's been logged today.
+  const summaryParts: string[] = [];
+  if (supplements.length > 0) summaryParts.push(`${takenCount}/${supplements.length} taken`);
+  if (checklist.weight_kg !== null) summaryParts.push(`${weightKgToInput(checklist.weight_kg)} lbs`);
+  if (checklist.alcohol) summaryParts.push('alcohol');
+
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+    <CollapsibleCard
+      title="Daily tracking"
+      summary={saving ? 'Saving…' : summaryParts.join(' · ')}
+    >
+      <div className="mb-3">
+        <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Supplements &amp; Alcohol
-        </h3>
-        <span className="text-xs text-zinc-400">
-          {saving ? 'Saving…' : supplements.length > 0 ? `${takenCount}/${supplements.length} taken` : ''}
-        </span>
+        </h4>
       </div>
 
       {supplements.length === 0 ? (
@@ -249,6 +257,6 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
       </div>
 
       {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
-    </div>
+    </CollapsibleCard>
   );
 }

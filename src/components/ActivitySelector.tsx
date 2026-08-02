@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { CollapsibleCard } from './CollapsibleCard';
 
 export interface ActivityData {
   multiplier: number;
@@ -24,6 +25,14 @@ const PRESETS = [
   { label: 'Active', multiplier: 1.725, multiplier_low: 1.65, multiplier_high: 1.8, description: 'Hard exercise for 60+ minutes, physically active day' },
   { label: 'V. Active', multiplier: 1.9, multiplier_low: 1.8, multiplier_high: 2.0, description: 'Very hard exercise or physical labor, intense training' },
 ];
+
+/** What the collapsed header shows, so today's activity is visible without expanding. */
+function activitySummary(activity: ActivityData | null): string {
+  if (!activity) return 'not set';
+  const preset = PRESETS.find((p) => Math.abs(activity.multiplier - p.multiplier) < 0.001);
+  const label = preset ? preset.label : activity.summary;
+  return label ? `${label} · ${activity.multiplier.toFixed(2)}` : activity.multiplier.toFixed(2);
+}
 
 export function ActivitySelector({ currentActivity, date, onSelect }: ActivitySelectorProps) {
   const [inputValue, setInputValue] = useState('');
@@ -131,11 +140,7 @@ export function ActivitySelector({ currentActivity, date, onSelect }: ActivitySe
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-        Activity Level Today
-      </h3>
-
+    <CollapsibleCard title="Activity" summary={activitySummary(currentActivity)}>
       {/* Text input */}
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
@@ -209,6 +214,6 @@ export function ActivitySelector({ currentActivity, date, onSelect }: ActivitySe
           )}
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }

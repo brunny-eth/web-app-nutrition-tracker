@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { CollapsibleCard } from './CollapsibleCard';
 
 export interface SavedMeal {
   id: string;
@@ -30,9 +31,6 @@ export function SavedMealList({
   onLogged,
   onRemoved,
 }: SavedMealListProps) {
-  // Collapsed by default: these are a reference you open when you want them, not
-  // something to scroll past on the way to logging.
-  const [open, setOpen] = useState(false);
   // Keyed by id so two meals don't share one input. Absent means one serving —
   // logging the usual amount shouldn't require typing anything.
   const [servings, setServings] = useState<Record<string, string>>({});
@@ -95,122 +93,97 @@ export function SavedMealList({
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-      >
-        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Saved meals
-          <span className="ml-1.5 text-xs font-normal text-zinc-400">{savedMeals.length}</span>
-        </span>
-        <svg
-          className={`h-4 w-4 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="border-t border-zinc-100 p-4 dark:border-zinc-800">
-          <ul className="space-y-3">
-            {savedMeals.map((meal) => {
-              const busy = busyId === meal.id;
-              const detailsOpen = detailsId === meal.id;
-
-              return (
-                <li
-                  key={meal.id}
-                  className="rounded-xl border border-zinc-100 p-3 dark:border-zinc-800"
+    // Collapsed by default: a reference you open when you want it, not something to
+    // scroll past on the way to logging.
+    <CollapsibleCard title="Saved meals" summary={String(savedMeals.length)}>
+      <ul className="space-y-3">
+        {savedMeals.map((meal) => {
+          const busy = busyId === meal.id;
+          const detailsOpen = detailsId === meal.id;
+          return (
+            <li
+              key={meal.id}
+              className="rounded-xl border border-zinc-100 p-3 dark:border-zinc-800"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    {meal.name}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+                    {meal.calories_per_serving} cal · {meal.protein_per_serving}g protein per
+                    serving
+                  </p>
+                </div>
+                {/* Holds the serving description and Remove. Keeping Remove out of
+                    the title row stops a destructive action sitting under your
+                    thumb next to the meal name. */}
+                <button
+                  type="button"
+                  onClick={() => setDetailsId((prev) => (prev === meal.id ? null : meal.id))}
+                  aria-expanded={detailsOpen}
+                  aria-label={`Details for ${meal.name}`}
+                  className={`-mr-1 shrink-0 rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 ${
+                    detailsOpen ? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800' : ''
+                  }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                        {meal.name}
-                      </p>
-                      <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-                        {meal.calories_per_serving} cal · {meal.protein_per_serving}g protein per
-                        serving
-                      </p>
-                    </div>
-                    {/* Holds the serving description and Remove. Keeping Remove out of
-                        the title row stops a destructive action sitting under your
-                        thumb next to the meal name. */}
-                    <button
-                      type="button"
-                      onClick={() => setDetailsId((prev) => (prev === meal.id ? null : meal.id))}
-                      aria-expanded={detailsOpen}
-                      aria-label={`Details for ${meal.name}`}
-                      className={`-mr-1 shrink-0 rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 ${
-                        detailsOpen ? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800' : ''
-                      }`}
-                    >
-                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M6 10a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM11.5 10a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM17 10a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                      </svg>
-                    </button>
-                  </div>
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M6 10a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM11.5 10a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM17 10a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                  </svg>
+                </button>
+              </div>
+              {detailsOpen && (
+                <div className="mt-2 space-y-2 rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-800/50">
+                  <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                    {meal.serving_description}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => remove(meal)}
+                    disabled={busy}
+                    className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                  >
+                    Remove this meal
+                  </button>
+                </div>
+              )}
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.25"
+                  min="0"
+                  value={servingsFor(meal.id)}
+                  onChange={(e) =>
+                    setServings((prev) => ({ ...prev, [meal.id]: e.target.value }))
+                  }
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') log(meal);
+                  }}
+                  aria-label={`Servings of ${meal.name} eaten`}
+                  className="w-14 shrink-0 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-center text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+                <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
+                  servings
+                </span>
+                {/* Fills the remaining width rather than floating right, which left
+                    an awkward gap on a narrow screen — and makes a bigger target. */}
+                <button
+                  type="button"
+                  onClick={() => log(meal)}
+                  disabled={busy}
+                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busy ? 'Logging…' : 'Log'}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
 
-                  {detailsOpen && (
-                    <div className="mt-2 space-y-2 rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-800/50">
-                      <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
-                        {meal.serving_description}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => remove(meal)}
-                        disabled={busy}
-                        className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                      >
-                        Remove this meal
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="mt-3 flex items-center gap-2">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.25"
-                      min="0"
-                      value={servingsFor(meal.id)}
-                      onChange={(e) =>
-                        setServings((prev) => ({ ...prev, [meal.id]: e.target.value }))
-                      }
-                      onFocus={(e) => e.currentTarget.select()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') log(meal);
-                      }}
-                      aria-label={`Servings of ${meal.name} eaten`}
-                      className="w-14 shrink-0 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-center text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                    <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
-                      servings
-                    </span>
-                    {/* Fills the remaining width rather than floating right, which left
-                        an awkward gap on a narrow screen — and makes a bigger target. */}
-                    <button
-                      type="button"
-                      onClick={() => log(meal)}
-                      disabled={busy}
-                      className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {busy ? 'Logging…' : 'Log'}
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-
-          {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
-        </div>
-      )}
-    </div>
+      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+    </CollapsibleCard>
   );
 }
