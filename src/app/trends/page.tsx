@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { withTrailingAverages } from '@/lib/trailing-average';
 import {
   Line,
   XAxis,
@@ -823,44 +824,6 @@ export default function TrendsPage() {
       </main>
     </div>
   );
-}
-
-const DAY_MS = 86_400_000;
-const dateMs = (d: string) => new Date(d + 'T12:00:00').getTime();
-
-/** Suffix for the trailing-average companion of a series, e.g. `protein` → `proteinAvg7`. */
-const AVG_SUFFIX = 'Avg7';
-
-/**
- * Adds a 7-day trailing average for each named field, windowed by calendar date
- * rather than by the previous 7 rows — so a gap in logging shortens the window
- * instead of silently averaging in readings from weeks back. Days where the field
- * is null are skipped, which keeps sparse series (blood pressure) usable.
- *
- * A single reading in the window yields null rather than an "average" that is just
- * that reading drawn in a heavier stroke — which would show sparse series as a flat
- * plateau and imply smoothing that never happened.
- *
- * Values are left unrounded; each chart's tooltip formatter decides precision.
- */
-function withTrailingAverages<T extends { date: string }>(
-  points: T[],
-  fields: (keyof T & string)[]
-): (T & Record<string, number | null>)[] {
-  return points.map((point, i) => {
-    const cutoff = dateMs(point.date) - 6 * DAY_MS;
-    const window = points.slice(0, i + 1).filter((w) => dateMs(w.date) >= cutoff);
-
-    const averages: Record<string, number | null> = {};
-    for (const field of fields) {
-      const values = window
-        .map((w) => w[field] as unknown as number | null)
-        .filter((v): v is number => v != null);
-      averages[field + AVG_SUFFIX] =
-        values.length >= 2 ? values.reduce((sum, v) => sum + v, 0) / values.length : null;
-    }
-    return { ...point, ...averages };
-  });
 }
 
 /**
