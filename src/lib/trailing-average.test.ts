@@ -54,9 +54,10 @@ describe('withTrailingAverages', () => {
     expect(result[2].bpAvg7).toBeNull();
   });
 
-  it('still includes earlier gap days in a later average', () => {
-    // Skipping the average on a blank day must not drop that day's neighbours from
-    // the window — only the blank day itself has no value to contribute.
+  it('treats a missing reading as absent, not as a zero', () => {
+    // A blank day contributes nothing and is not counted in the denominator, so a
+    // skipped reading can't drag the average down. It also doesn't split the
+    // window: the readings on either side still average together.
     const result = withTrailingAverages(
       series([
         ['2026-07-27', 10],
@@ -66,7 +67,7 @@ describe('withTrailingAverages', () => {
       ['bp']
     );
 
-    expect(result[2].bpAvg7).toBe(15);
+    expect(result[2].bpAvg7).toBe(15); // (10 + 20) / 2, not (10 + 0 + 20) / 3
   });
 
   it('needs two readings before reporting an average', () => {
