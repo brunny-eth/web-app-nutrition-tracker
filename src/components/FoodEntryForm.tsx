@@ -441,7 +441,7 @@ export function FoodEntryForm({
         <button
           type="submit"
           disabled={loading || !canSubmit}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? (
             <>
@@ -449,7 +449,7 @@ export function FoodEntryForm({
               {isRecurring ? 'Saving…' : 'Parsing...'}
             </>
           ) : isRecurring ? (
-            'Save this meal for frequent use'
+            'Save Meal'
           ) : (
             'Log Food'
           )}
