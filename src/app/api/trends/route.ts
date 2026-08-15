@@ -7,6 +7,11 @@ import { addDaysToDateString } from '@/lib/date-resolution';
 import { roundLbs } from '@/lib/units';
 import { DEFAULT_SATURATED_FAT_PERCENT, saturatedFatPercentOfCalories } from '@/lib/targets';
 
+// Averages are reported for every window regardless of which one the charts are
+// showing, so the fetch always spans the longest of them.
+const AVERAGE_WINDOWS = [7, 14, 30, 90];
+const LONGEST_WINDOW = Math.max(...AVERAGE_WINDOWS);
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,10 +37,11 @@ export async function GET(request: NextRequest) {
     .eq('id', userId)
     .single();
 
-  // Calculate date range
+  // Calculate date range. Always reach back far enough for the longest average
+  // window; the charts are narrowed to `days` further down.
   const endDate = new Date();
   const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
+  startDate.setDate(startDate.getDate() - Math.max(days, LONGEST_WINDOW));
 
   const startDateStr = startDate.toISOString().split('T')[0];
   const endDateStr = endDate.toISOString().split('T')[0];
@@ -228,9 +234,8 @@ export async function GET(request: NextRequest) {
 
   // Exclude today so charts and averages only use complete days (today is still in progress)
   const todayStr = endDateStr;
-  const chartData = allChartData.filter((d) => d.date !== todayStr);
+  const completeDays = allChartData.filter((d) => d.date !== todayStr);
 
-  // Averages for the last 7 and 30 complete days — today is already out of chartData.
   // Cutoffs are date strings compared against date strings: the previous version
   // compared a UTC-midnight parse of d.date against a Date carrying the current time
   // of day, so the oldest day of each window almost always fell just outside it and
@@ -238,10 +243,10 @@ export async function GET(request: NextRequest) {
   const sevenDayCutoff = addDaysToDateString(todayStr, -7);
   const thirtyDayCutoff = addDaysToDateString(todayStr, -30);
 
-  const last7Days = chartData.filter((d) => d.date >= sevenDayCutoff);
-  const last30Days = chartData.filter((d) => d.date >= thirtyDayCutoff);
+  // Only the requested window reaches the charts, even though the fetch spans 90 days.
+  const chartData = completeDays.filter((d) => d.date >= addDaysToDateString(todayStr, -days));
 
-  const calculateAverages = (data: typeof chartData) => {
+  const calculateAverages = (data: typeof completeDays) => {
     if (data.length === 0) return null;
     
     const withDeficit = data.filter(d => d.deficit !== null);
@@ -278,6 +283,14 @@ export async function GET(request: NextRequest) {
       daysTracked: data.length,
     };
   };
+
+  // Keyed by window length so the table can show every one of them at once.
+  const averagesByWindow = Object.fromEntries(
+    AVERAGE_WINDOWS.map((window) => [
+      window,
+      calculateAverages(completeDays.filter((d) => d.date >= addDaysToDateString(todayStr, -window))),
+    ])
+  );
 
   // Get recommendations for comparison
   const isMale = settings?.sex === 'male';
@@ -330,10 +343,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     chartData,
     weightData,
-    averages: {
-      week: calculateAverages(last7Days),
-      month: calculateAverages(last30Days),
-    },
+    averages: averagesByWindow,
     adherence: {
       week: computeAdherence(sevenDayCutoff),
       month: computeAdherence(thirtyDayCutoff),

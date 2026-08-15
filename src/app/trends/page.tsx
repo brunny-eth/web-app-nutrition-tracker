@@ -76,10 +76,8 @@ interface Adherence {
 interface TrendsData {
   chartData: ChartDataPoint[];
   weightData: WeightPoint[];
-  averages: {
-    week: Averages | null;
-    month: Averages | null;
-  };
+  // Keyed by window length in days — see AVERAGE_WINDOWS.
+  averages: Record<string, Averages | null>;
   adherence: {
     week: Adherence | null;
     month: Adherence | null;
@@ -95,6 +93,9 @@ interface TrendsData {
     calorieDeficit: number;
   } | null;
 }
+
+// The windows the API reports averages over, and the columns of the table below.
+const AVERAGE_WINDOWS = [7, 14, 30, 90];
 
 export default function TrendsPage() {
   const router = useRouter();
@@ -179,6 +180,49 @@ export default function TrendsPage() {
   ]);
   const monthAdh = adherence.month;
   const weekAdh = adherence.week;
+  const avgFor = (window: number) => averages[String(window)] ?? null;
+  const weekAvg = avgFor(7);
+  const monthAvg = avgFor(30);
+
+  // One definition per metric, rendered once per window — otherwise every metric
+  // would be spelled out four times across the table.
+  const metricRows: {
+    label: string;
+    format: (a: Averages) => string | null;
+    target: string;
+  }[] = [
+    { label: 'Calories', format: (a) => String(a.avgCalories), target: '—' },
+    {
+      label: 'Protein',
+      format: (a) => `${a.avgProtein}g`,
+      target: settings?.targetProtein ? `${settings.targetProtein}g` : '—',
+    },
+    {
+      label: 'Caloric Deficit',
+      format: (a) => (a.avgDeficit === null ? null : `${a.avgDeficit > 0 ? '+' : ''}${a.avgDeficit}`),
+      target: settings?.calorieDeficit != null ? String(settings.calorieDeficit) : '—',
+    },
+    { label: 'Sat. Fat', format: (a) => `${a.avgSaturatedFat}g`, target: '—' },
+    {
+      label: 'Sat. Fat (% of cals)',
+      format: (a) => (a.avgSatFatPercent == null ? null : `${a.avgSatFatPercent}%`),
+      target: `<${recommendations.saturatedFatPercent}%`,
+    },
+    {
+      label: 'Added Sugar',
+      format: (a) => `${a.avgAddedSugar}g`,
+      target: `<${recommendations.addedSugarLimit}g`,
+    },
+    { label: 'Sodium', format: (a) => `${a.avgSodium}mg`, target: `<${recommendations.sodiumLimit}mg` },
+    { label: 'Potassium', format: (a) => `${a.avgPotassium}mg`, target: '>3500mg' },
+    {
+      label: 'K/Na Ratio',
+      format: (a) => (a.avgKNaRatio == null ? null : `${a.avgKNaRatio.toFixed(2)}:1`),
+      target: '>1.5:1',
+    },
+    { label: 'Fiber', format: (a) => `${a.avgFiber}g`, target: `>${recommendations.fiberTarget}g` },
+    { label: 'Days Tracked', format: (a) => String(a.daysTracked), target: '—' },
+  ];
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -231,7 +275,7 @@ export default function TrendsPage() {
           <StatCard
             label="Avg Daily Deficit"
             period="7 days"
-            value={averages.week?.avgDeficit}
+            value={weekAvg?.avgDeficit}
             unit="kcal"
             isGood={(v) => v !== null && v > 0}
             formatValue={(v) => (v && v > 0 ? `+${v}` : String(v))}
@@ -239,7 +283,7 @@ export default function TrendsPage() {
           <StatCard
             label="Avg Daily Deficit"
             period="30 days"
-            value={averages.month?.avgDeficit}
+            value={monthAvg?.avgDeficit}
             unit="kcal"
             isGood={(v) => v !== null && v > 0}
             formatValue={(v) => (v && v > 0 ? `+${v}` : String(v))}
@@ -247,14 +291,14 @@ export default function TrendsPage() {
           <StatCard
             label="Protein Goal"
             period="7 days"
-            value={averages.week?.avgProteinPercent}
+            value={weekAvg?.avgProteinPercent}
             unit="%"
             isGood={(v) => v !== null && v >= 100}
           />
           <StatCard
             label="Protein Goal"
             period="30 days"
-            value={averages.month?.avgProteinPercent}
+            value={monthAvg?.avgProteinPercent}
             unit="%"
             isGood={(v) => v !== null && v >= 100}
           />
@@ -659,106 +703,43 @@ export default function TrendsPage() {
 
         {/* Detailed Averages */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-4 text-lg font-medium text-zinc-900 dark:text-zinc-100">
+          <h2 className="mb-1 text-lg font-medium text-zinc-900 dark:text-zinc-100">
             Detailed Averages
           </h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            Per day across the days you logged food in each window (excludes today)
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-zinc-700">
                   <th className="py-2 text-left font-medium text-zinc-500">Metric</th>
-                  <th className="py-2 text-right font-medium text-zinc-500">7-Day Avg</th>
-                  <th className="py-2 text-right font-medium text-zinc-500">30-Day Avg</th>
-                  <th className="py-2 text-right font-medium text-zinc-500">Target/Limit</th>
+                  {AVERAGE_WINDOWS.map((w) => (
+                    <th key={w} className="py-2 pl-3 text-right font-medium text-zinc-500 whitespace-nowrap">
+                      {w}-Day
+                    </th>
+                  ))}
+                  <th className="py-2 pl-3 text-right font-medium text-zinc-500 whitespace-nowrap">Target</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Calories</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgCalories ?? '—'}</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgCalories ?? '—'}</td>
-                  <td className="py-2 text-right text-zinc-500">—</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Protein</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgProtein ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgProtein ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-500">{settings?.targetProtein ?? '—'}g</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Caloric Deficit</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
-                    {averages.week && averages.week.avgDeficit !== null 
-                      ? (averages.week.avgDeficit > 0 ? '+' : '') + averages.week.avgDeficit 
-                      : '—'}
-                  </td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
-                    {averages.month && averages.month.avgDeficit !== null 
-                      ? (averages.month.avgDeficit > 0 ? '+' : '') + averages.month.avgDeficit 
-                      : '—'}
-                  </td>
-                  <td className="py-2 text-right text-zinc-500">{settings?.calorieDeficit ?? '—'}</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Sat. Fat</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgSaturatedFat ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgSaturatedFat ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-500">—</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Sat. Fat (% of cals)</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
-                    {averages.week?.avgSatFatPercent != null ? averages.week.avgSatFatPercent + '%' : '—'}
-                  </td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
-                    {averages.month?.avgSatFatPercent != null ? averages.month.avgSatFatPercent + '%' : '—'}
-                  </td>
-                  <td className="py-2 text-right text-zinc-500">&lt;{recommendations.saturatedFatPercent}%</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Added Sugar</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgAddedSugar ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgAddedSugar ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-500">&lt;{recommendations.addedSugarLimit}g</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Sodium</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgSodium ?? '—'}mg</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgSodium ?? '—'}mg</td>
-                  <td className="py-2 text-right text-zinc-500">&lt;{recommendations.sodiumLimit}mg</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Potassium</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgPotassium ?? '—'}mg</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgPotassium ?? '—'}mg</td>
-                  <td className="py-2 text-right text-zinc-500">&gt;3500mg</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">K/Na Ratio</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
-                    {averages.week?.avgKNaRatio !== null && averages.week?.avgKNaRatio !== undefined 
-                      ? averages.week.avgKNaRatio.toFixed(2) + ':1' 
-                      : '—'}
-                  </td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">
-                    {averages.month?.avgKNaRatio !== null && averages.month?.avgKNaRatio !== undefined 
-                      ? averages.month.avgKNaRatio.toFixed(2) + ':1' 
-                      : '—'}
-                  </td>
-                  <td className="py-2 text-right text-zinc-500">&gt;1.5:1</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Fiber</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.avgFiber ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.avgFiber ?? '—'}g</td>
-                  <td className="py-2 text-right text-zinc-500">&gt;{recommendations.fiberTarget}g</td>
-                </tr>
-                <tr>
-                  <td className="py-2 text-zinc-700 dark:text-zinc-300">Days Tracked</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.week?.daysTracked ?? 0}</td>
-                  <td className="py-2 text-right text-zinc-900 dark:text-zinc-100">{averages.month?.daysTracked ?? 0}</td>
-                  <td className="py-2 text-right text-zinc-500">—</td>
-                </tr>
+                {metricRows.map((row) => (
+                  <tr key={row.label}>
+                    <td className="py-2 pr-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{row.label}</td>
+                    {AVERAGE_WINDOWS.map((w) => {
+                      const windowAvg = avgFor(w);
+                      return (
+                        <td
+                          key={w}
+                          className="py-2 pl-3 text-right text-zinc-900 dark:text-zinc-100 whitespace-nowrap"
+                        >
+                          {(windowAvg && row.format(windowAvg)) ?? '—'}
+                        </td>
+                      );
+                    })}
+                    <td className="py-2 pl-3 text-right text-zinc-500 whitespace-nowrap">{row.target}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
