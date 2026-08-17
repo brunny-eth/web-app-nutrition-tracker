@@ -334,7 +334,7 @@ export default function Home() {
             selectedDate={selectedDate}
             today={today}
             onLogged={fetchEntries}
-            onRemoved={fetchSavedMeals}
+            onChanged={fetchSavedMeals}
           />
 
           {/* Activity Selector */}

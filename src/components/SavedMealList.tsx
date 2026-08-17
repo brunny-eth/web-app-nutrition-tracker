@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CollapsibleCard } from './CollapsibleCard';
 
 export interface SavedMeal {
@@ -21,7 +21,8 @@ interface SavedMealListProps {
   selectedDate: string;
   today: string;
   onLogged: () => void;
-  onRemoved: () => void;
+  /** Refetch the list — a meal was renamed or removed. */
+  onChanged: () => void;
 }
 
 export function SavedMealList({
@@ -29,7 +30,7 @@ export function SavedMealList({
   selectedDate,
   today,
   onLogged,
-  onRemoved,
+  onChanged,
 }: SavedMealListProps) {
   // Keyed by id so two meals don't share one input. Absent means one serving —
   // logging the usual amount shouldn't require typing anything.
@@ -38,6 +39,13 @@ export function SavedMealList({
   // enough that stacking several would bury the rows below.
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Which meal is being renamed, and the in-progress name. Held here rather than in
+  // the row so an abandoned edit doesn't survive the list refetching.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+  // Set on the Cancel button's mousedown, which fires before the input's blur —
+  // otherwise blur-to-commit would save the edit the user just asked to discard.
+  const cancellingRef = useRef(false);
   const [error, setError] = useState('');
 
   if (savedMeals.length === 0) return null;
@@ -77,6 +85,51 @@ export function SavedMealList({
     }
   };
 
+  const startRename = (meal: SavedMeal) => {
+    setError('');
+    setRenamingId(meal.id);
+    setNameDraft(meal.name);
+  };
+
+  const cancelRename = () => {
+    cancellingRef.current = false;
+    setRenamingId(null);
+    setNameDraft('');
+  };
+
+  const saveRename = async (meal: SavedMeal) => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) {
+      setError('Name cannot be empty');
+      return;
+    }
+    // Nothing to save, so skip the round trip and just close the field.
+    if (trimmed === meal.name) {
+      cancelRename();
+      return;
+    }
+
+    setError('');
+    setBusyId(meal.id);
+    try {
+      const res = await fetch(`/api/saved-meals/${meal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to rename');
+      }
+      cancelRename();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to rename');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const remove = async (meal: SavedMeal) => {
     if (!confirm(`Remove "${meal.name}"? Meals you already logged from it stay put.`)) return;
 
@@ -84,7 +137,7 @@ export function SavedMealList({
     try {
       const res = await fetch(`/api/saved-meals/${meal.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to remove');
-      onRemoved();
+      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove');
     } finally {
@@ -100,24 +153,44 @@ export function SavedMealList({
         {savedMeals.map((meal) => {
           const busy = busyId === meal.id;
           const detailsOpen = detailsId === meal.id;
+          const renaming = renamingId === meal.id;
           return (
             <li
               key={meal.id}
               className="rounded-xl border border-zinc-100 p-3 dark:border-zinc-800"
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {meal.name}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  {renaming ? (
+                    <input
+                      autoFocus
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveRename(meal);
+                        if (e.key === 'Escape') cancelRename();
+                      }}
+                      // Blur commits rather than discards: tapping away from a field
+                      // you just typed into shouldn't throw the edit out.
+                      onBlur={() => {
+                        if (cancellingRef.current) cancelRename();
+                        else saveRename(meal);
+                      }}
+                      maxLength={80}
+                      aria-label={`Name for ${meal.name}`}
+                      className="w-full rounded-lg border border-blue-500 bg-white px-2 py-1 text-sm font-medium text-zinc-900 outline-none focus:ring-1 focus:ring-blue-500 dark:bg-zinc-800 dark:text-zinc-100"
+                    />
+                  ) : (
+                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      {meal.name}
+                    </p>
+                  )}
                   <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
                     {meal.calories_per_serving} cal · {meal.protein_per_serving}g protein per
                     serving
                   </p>
                 </div>
-                {/* Holds the serving description and Remove. Keeping Remove out of
-                    the title row stops a destructive action sitting under your
-                    thumb next to the meal name. */}
+                {/* Opens the serving description and the rename field. */}
                 <button
                   type="button"
                   onClick={() => setDetailsId((prev) => (prev === meal.id ? null : meal.id))}
@@ -139,16 +212,25 @@ export function SavedMealList({
                   </p>
                   <button
                     type="button"
-                    onClick={() => remove(meal)}
-                    disabled={busy}
-                    className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                    onMouseDown={() => {
+                      cancellingRef.current = renaming;
+                    }}
+                    onClick={() => (renaming ? cancelRename() : startRename(meal))}
+                    className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
                   >
-                    Remove this meal
+                    {renaming ? 'Cancel rename' : 'Rename this meal'}
                   </button>
                 </div>
               )}
               <div className="mt-3 flex items-center gap-2">
+                <label
+                  htmlFor={`servings-${meal.id}`}
+                  className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400"
+                >
+                  servings:
+                </label>
                 <input
+                  id={`servings-${meal.id}`}
                   type="number"
                   inputMode="decimal"
                   step="0.25"
@@ -162,20 +244,27 @@ export function SavedMealList({
                     if (e.key === 'Enter') log(meal);
                   }}
                   aria-label={`Servings of ${meal.name} eaten`}
-                  className="w-14 shrink-0 rounded-lg border border-zinc-200 bg-white px-2 py-2 text-center text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  className="w-14 shrink-0 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-center text-sm text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                 />
-                <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
-                  servings
-                </span>
-                {/* Fills the remaining width rather than floating right, which left
-                    an awkward gap on a narrow screen — and makes a bigger target. */}
+                {/* Sized to the action rather than stretched across the row — full
+                    width made it the loudest thing on the card. Remove sits at the
+                    far end, deliberately out of reach of the Log tap. */}
                 <button
                   type="button"
                   onClick={() => log(meal)}
                   disabled={busy}
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-24 shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy ? 'Logging…' : 'Log'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(meal)}
+                  disabled={busy}
+                  className="ml-auto shrink-0 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:border-red-200 hover:bg-red-50 disabled:opacity-50 dark:border-zinc-700 dark:text-red-400 dark:hover:border-red-900 dark:hover:bg-red-950/30"
+                >
+                  <span className="sm:hidden">Remove</span>
+                  <span className="hidden sm:inline">Remove this meal</span>
                 </button>
               </div>
             </li>
