@@ -312,8 +312,8 @@ export function FoodEntryForm({
             isRecurring
               ? "Paste or describe the recipe, and note anything you changed — e.g. 'used 2 lb ground beef instead of 1'. Recipe photos work too."
               : images.length > 0
-                ? "Add details (optional) - e.g., '2 servings' or 'half portion'"
-                : "Log food here via text or a photo of nutrition facts/menu. The more details you include, the better. You can do 1 big message daily or split up for each meal."
+                ? "Describe the food — a nutrition label stands on its own, but a photo of the meal needs a description to go with it."
+                : "Log food here via text, or a photo of nutrition facts/menu. A photo of the meal itself works too, alongside a description of what it is. The more details you include, the better. You can do 1 big message daily or split up for each meal."
           }
           rows={4}
           className="block w-full resize-none rounded-xl border-0 bg-transparent px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100"
@@ -381,7 +381,7 @@ export function FoodEntryForm({
           onClick={() => fileInputRef.current?.click()}
           disabled={loading}
           className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          title={isRecurring ? 'Add photos of the recipe' : 'Add photo of nutrition facts or menu'}
+          title={isRecurring ? 'Add photos of the recipe' : 'Add a photo — nutrition facts, a menu, or the meal itself'}
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />

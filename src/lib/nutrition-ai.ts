@@ -12,8 +12,9 @@ import {
 } from '@/types/nutrition';
 
 /**
- * The input can't be turned into nutrition data — a photo of a plate rather than a
- * label, or a description with no recognizable food. The user's problem to fix, so
+ * The input can't be turned into nutrition data — a photo of a plate with nothing
+ * written to go with it, or a description with no recognizable food. The user's
+ * problem to fix, so
  * callers should surface the message and return 400 rather than 500.
  */
 export class MealRejectedError extends Error {
@@ -80,11 +81,17 @@ NUTRITIONAL DATA:
 - POTASSIUM: Include potassium content in mg. Good sources include bananas (~400mg), potatoes (~900mg), spinach, avocados, beans.
 
 IMAGE HANDLING:
-- If an image is attached, analyze it for nutritional information
-- VALID images: nutrition facts labels, menus with nutritional info, food packaging
-- INVALID images: photos of actual food/meals (we cannot estimate nutrition from food photos)
-- If the image shows actual food rather than a label, return an empty items list and set rejection_reason to: "Cannot analyze photos of food. Please photograph nutrition labels or menus instead."
-- For valid images: extract the nutrition facts shown and apply any quantity mentioned in the text (e.g., "2 bags" = multiply by 2)
+Every attached image is one of two kinds. Decide which before anything else.
+
+(a) NUTRITION SOURCE - a nutrition facts label, a menu with nutrition info, food packaging, or a screenshot of nutrition stats from an app or tracker. These carry the numbers themselves, so they stand alone and need NO description from the user. Read the values off the image and apply any quantity mentioned in the text (e.g., "2 bags" = multiply by 2).
+
+(b) FOOD PHOTO - a picture of actual food: a plate, a bowl, a takeout container, a partly eaten meal. A photo cannot be measured on its own, but it is a strong SUPPLEMENT to a written description. Use it to confirm what is on the plate, judge portion size against the plate/utensils/hands, catch ingredients or sauces the description left out, and read the preparation (fried vs grilled, dressing on the salad, visible oil).
+
+- A FOOD PHOTO REQUIRES CONTEXT. If a food photo arrives with no description, or with a description that is only a quantity ("1 serving", "2 servings", "half portion"), return an empty items list and set rejection_reason to exactly: "For accuracy, please provide some context beyond just an image to continue processing this meal."
+- Anything the user writes ABOUT THE FOOD counts as context, even if brief - "chicken burrito bowl from Chipotle", "homemade, about 2 cups", "leftover lasagna". Only an empty description or a bare quantity fails. Do not reject for thin context; reject only for absent context.
+- A NUTRITION SOURCE never needs context. Never return the rejection above for a label, menu, or stats screenshot.
+- When a food photo has context, the TEXT LEADS and the photo refines it. Where they disagree on quantity or ingredients, trust the text - the user knows what they ate. Note in the assumptions what the photo contributed.
+- Estimates that lean on a food photo rather than stated amounts get at least ±15% bounds, even when the photo looks clear. Tighten to ±10% only where the text gives explicit amounts.
 - Combine image data with any other foods mentioned in the text
 
 OUTPUT FORMAT:
@@ -131,7 +138,19 @@ Output: 3 items
   2. "honey" (1 tbsp): 64 cal, 0g protein, 17g carbs, 0g fat, 0g sat_fat, 0g fiber, 1mg sodium, 17g added_sugar, 10mg potassium
      Assumptions: Honey is fully counted as added sugar.
   3. "banana" (1 medium): 105 cal, 1.3g protein, 27g carbs, 0.4g fat, 0.1g sat_fat, 3.1g fiber, 1mg sodium, 0g added_sugar, 420mg potassium
-     Assumptions: Banana sugars are natural - added_sugar = 0.`;
+     Assumptions: Banana sugars are natural - added_sugar = 0.
+
+Example 6 - Food photo used as a supplement to the description (±15% bounds):
+Input: photo of a plate + "chicken thighs and roasted potatoes I made tonight"
+Output: 2 items
+  1. "roasted chicken thighs" (2 thighs, ~7 oz cooked): 440 cal (374-506), 44g protein, 0g carbs, 29g fat, 8g sat_fat, 0g fiber, 480mg sodium, 0g added_sugar, 520mg potassium
+     Assumptions: Photo shows two bone-in, skin-on thighs, skin browned and eaten. Sized against the dinner plate. Photo-assisted so ±15%.
+  2. "roasted potatoes" (~1.5 cups): 250 cal (213-288), 5g protein, 42g carbs, 8g fat, 1.2g sat_fat, 4g fiber, 300mg sodium, 0g added_sugar, 950mg potassium
+     Assumptions: Photo shows visible oil sheen and herbs - counted ~2 tsp oil. Volume judged against the plate.
+
+Example 7 - Food photo with no context:
+Input: photo of a burrito, no description (or only "1 serving")
+Output: 0 items, rejection_reason: "For accuracy, please provide some context beyond just an image to continue processing this meal."`;
 
 /** Turn a `data:image/jpeg;base64,...` URL into an image block, or null if malformed. */
 function toImageBlock(dataUrl: string): Anthropic.ImageBlockParam | null {
@@ -163,9 +182,11 @@ export async function parseMealDescription(
   let textPrompt = `Today's date is ${todayDate}.\n\n`;
 
   if (imageBase64 && mealText && mealText !== IMAGE_ONLY_TEXT) {
-    textPrompt += `Parse this meal. The image shows a nutrition label/menu. The user's description is: "${mealText}"\n\nExtract nutrition from the image AND parse any other foods mentioned in the text.`;
+    // Deliberately doesn't claim what the image is — it may be a label, or it may be
+    // a photo of the plate that only supplements the description.
+    textPrompt += `Parse this meal. An image is attached. The user's description is: "${mealText}"\n\nIf the image is a nutrition label, menu, or stats screenshot, take the numbers from it. If it is a photo of the food itself, use it to refine the description — portion size, ingredients, preparation — with the text taking priority. Parse any other foods mentioned in the text too.`;
   } else if (imageBase64) {
-    textPrompt += `Extract nutritional data from this image. Assume 1 serving unless otherwise indicated.`;
+    textPrompt += `Extract nutritional data from this image. The user gave no description of the food. If it is a nutrition label, menu, or stats screenshot, read it and assume 1 serving unless otherwise indicated. If it is a photo of actual food, reject it per the IMAGE HANDLING rules.`;
   } else {
     textPrompt += `Parse the following meal description and return structured nutritional data:\n\n"${mealText}"`;
   }
