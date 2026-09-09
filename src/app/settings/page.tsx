@@ -87,9 +87,13 @@ export default function SettingsPage() {
     setSupplements((prev) => [...prev, { id: `new_${prev.length}`, name: '', detail: '' }]);
   };
 
-  const updateSupplement = (index: number, field: 'name' | 'detail', value: string) => {
+  const updateSupplement = (index: number, field: 'name' | 'detail' | 'fiber_g', value: string) => {
     setSupplements((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, [field]: value } : s))
+      prev.map((s, i) => {
+        if (i !== index) return s;
+        // Kept as typed until save so the field can be cleared while editing.
+        return { ...s, [field]: field === 'fiber_g' ? (value === '' ? null : Number(value)) : value };
+      })
     );
   };
 
@@ -107,7 +111,15 @@ export default function SettingsPage() {
         let id = s.id && !s.id.startsWith('new_') ? s.id : slugify(s.name);
         while (seen.has(id)) id = `${id}_`;
         seen.add(id);
-        return { id, name: s.name.trim(), detail: s.detail?.trim() || undefined };
+        const fiber = Number(s.fiber_g);
+        return {
+          id,
+          name: s.name.trim(),
+          detail: s.detail?.trim() || undefined,
+          // Omitted rather than stored as 0, so a snapshot comparison doesn't see a
+          // change the first time an existing supplement is re-saved.
+          fiber_g: Number.isFinite(fiber) && fiber > 0 ? fiber : undefined,
+        };
       });
   };
 
@@ -393,13 +405,28 @@ export default function SettingsPage() {
                         placeholder="Name (e.g. Creatine)"
                         className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                       />
-                      <input
-                        type="text"
-                        value={s.detail || ''}
-                        onChange={(e) => updateSupplement(i, 'detail', e.target.value)}
-                        placeholder="Detail (e.g. 5g, AM with water)"
-                        className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={s.detail || ''}
+                          onChange={(e) => updateSupplement(i, 'detail', e.target.value)}
+                          placeholder="Detail (e.g. 5g, AM with water)"
+                          className="block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        />
+                        {/* Only psyllium has ever had one, but the dose belongs in
+                            config rather than in the code, and changing it must not
+                            restate fiber totals already logged. */}
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={s.fiber_g ?? ''}
+                          onChange={(e) => updateSupplement(i, 'fiber_g', e.target.value)}
+                          placeholder="Fiber g"
+                          aria-label="Fiber grams per dose"
+                          className="block w-24 shrink-0 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        />
+                      </div>
                     </div>
                     <button
                       type="button"

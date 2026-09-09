@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserId, hashPassword, verifyPassword } from '@/lib/auth';
-import { goalsChanged } from '@/lib/goal-history';
+import { scoredConfigChanged } from '@/lib/goal-history';
 import { getTodayInTimezone } from '@/lib/date-resolution';
 
 function getSupabase() {
@@ -128,11 +128,11 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
     }
 
-    // Record the new goals so trends can score past days against the goals that
-    // were in force then. Without this the settings row is the only record of what
-    // you were aiming at, and raising a target retroactively marks down every day
-    // you already hit the old one.
-    if (goalsChanged(current, updates)) {
+    // Record the new configuration so trends can score past days against what was
+    // in force then. Without this the settings row is the only record of what you
+    // were aiming at, and raising a target retroactively marks down every day you
+    // already hit the old one.
+    if (scoredConfigChanged(current, updates)) {
       // Effective from today, not from the update timestamp: goals apply to whole
       // logged days, and today's food is still being entered against the new ones.
       // Upserting on that date also collapses several edits in one day into a
@@ -149,6 +149,7 @@ export async function PATCH(request: NextRequest) {
             protein_g_per_kg: updated.protein_g_per_kg,
             protein_floor_g: updated.protein_floor_g,
             saturated_fat_percent: updated.saturated_fat_percent,
+            supplements: updated.supplements ?? [],
           },
           { onConflict: 'user_id,effective_from' }
         );

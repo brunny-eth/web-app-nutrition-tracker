@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserId } from '@/lib/auth';
 import { supplementFiberBonus } from '@/lib/supplements';
+import type { Supplement } from '@/types/database';
 import {
   FALLBACK_ACTIVITY_MULTIPLIER,
   calculateBMR,
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
   // snapshot was in force then, which may long predate the window itself.
   const { data: goalRows } = await supabase
     .from('goal_history')
-    .select('effective_from, calorie_deficit, protein_g_per_kg, protein_floor_g, saturated_fat_percent')
+    .select('effective_from, calorie_deficit, protein_g_per_kg, protein_floor_g, saturated_fat_percent, supplements')
     .eq('user_id', userId)
     .order('effective_from', { ascending: true });
 
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
     proteinGPerKg: Number(g.protein_g_per_kg),
     proteinFloorG: Number(g.protein_floor_g),
     saturatedFatPercent: Number(g.saturated_fat_percent),
+    supplements: Array.isArray(g.supplements) ? g.supplements : [],
   }));
 
   // Falls back to the live settings row for an account with no history yet, so the
@@ -72,6 +74,7 @@ export async function GET(request: NextRequest) {
     proteinGPerKg: settings?.protein_g_per_kg ?? 1.8,
     proteinFloorG: settings?.protein_floor_g ?? 150,
     saturatedFatPercent: settings?.saturated_fat_percent ?? DEFAULT_SATURATED_FAT_PERCENT,
+    supplements: Array.isArray(settings?.supplements) ? settings.supplements : [],
   };
 
   // Calculate date range. Always reach back far enough for the longest average
@@ -171,6 +174,9 @@ export async function GET(request: NextRequest) {
   // current one. Weight is the only term in Mifflin-St Jeor that moves week to
   // week, and using today's value for a day three months ago quietly reduced the
   // deficit already earned there by roughly 10 kcal per pound since lost.
+  const configForDate = (date: string): GoalSnapshot =>
+    resolveGoalsAsOf(goalHistory, date) ?? currentGoals;
+
   // Falls back to the settings weight only when there are no weigh-ins at all.
   const weightForDate = (date: string): number | null =>
     resolveWeightAsOf(weighIns, date) ?? settings?.weight_kg ?? null;
@@ -214,7 +220,7 @@ export async function GET(request: NextRequest) {
 
       // The goals as they stood on this date, so a later change to them can't
       // rewrite how well the day went.
-      const goals = resolveGoalsAsOf(goalHistory, date) ?? currentGoals;
+      const goals = configForDate(date);
       const weightKg = weightForDate(date);
 
       const targetCalories = tdee && goals.calorieDeficit
@@ -259,12 +265,14 @@ export async function GET(request: NextRequest) {
     });
   });
 
-  // Fold psyllium's fiber into each day's total, matching the daily view.
+  // Fold supplement fiber into each day's total, matching the daily view. Uses the
+  // dose configured on that date, so raising psyllium from 5g to 10g credits the
+  // days you actually took 10g rather than every day you ever ticked the box.
   // Only days with logged food appear here; a psyllium-only day with no food
   // logged won't show in trends, which is an acceptable edge case.
   Object.keys(dailyData).forEach((date) => {
     dailyData[date].fiber += supplementFiberBonus(
-      settings?.supplements,
+      configForDate(date).supplements,
       supplementsTakenByDate[date]
     );
   });
@@ -364,7 +372,7 @@ export async function GET(request: NextRequest) {
 
   // --- Supplement & alcohol adherence ---
   // Denominator is days that have a checklist row (so pre-feature days don't count against you).
-  const supplementsList: { id: string; name: string }[] = Array.isArray(settings?.supplements)
+  const supplementsList: Supplement[] = Array.isArray(settings?.supplements)
     ? settings.supplements
     : [];
 
@@ -377,13 +385,22 @@ export async function GET(request: NextRequest) {
     const rows = checklistRows.filter((c) => c.resolved_date >= cutoff);
     if (rows.length === 0) return null;
 
+    // Each supplement gets its own denominator: the days in the window on which it
+    // was actually on your list. Scoring against every tracked day meant adding a
+    // supplement showed it at near 0% — counting as missed the weeks before you had
+    // ever heard of it — which made the whole table untrustworthy after any edit.
     const supplements = supplementsList.map((s) => {
-      const taken = rows.filter((r) => (r.supplements_taken ?? []).includes(s.id)).length;
+      const eligible = rows.filter((r) =>
+        configForDate(r.resolved_date).supplements.some((x) => x.id === s.id)
+      );
+      const taken = eligible.filter((r) => (r.supplements_taken ?? []).includes(s.id)).length;
+
       return {
         id: s.id,
         name: s.name,
         taken,
-        pct: Math.round((taken / rows.length) * 100),
+        days: eligible.length,
+        pct: eligible.length > 0 ? Math.round((taken / eligible.length) * 100) : null,
       };
     });
 

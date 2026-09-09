@@ -1,3 +1,5 @@
+import type { Supplement } from '@/types/database';
+
 /**
  * Point-in-time goals.
  *
@@ -12,6 +14,12 @@
  * once from the current weight and reused for every day in the chart, so each
  * pound lost shrank the deficit you had already earned. Weigh-ins are already
  * recorded per day, so that history just needed to be read.
+ *
+ * The supplement list rides along in the same snapshot. It is scoring config too:
+ * it sets how much fiber a ticked supplement adds, and which supplements a day
+ * could possibly have been adherent to. Doubling a psyllium dose otherwise
+ * restates months of fiber totals, and adding a supplement scores every day
+ * before it existed as a miss.
  */
 
 /** One row of `goal_history` — a complete snapshot, not a delta. */
@@ -21,6 +29,7 @@ export interface GoalSnapshot {
   proteinGPerKg: number;
   proteinFloorG: number;
   saturatedFatPercent: number;
+  supplements: Supplement[];
 }
 
 export interface WeighIn {
@@ -83,7 +92,7 @@ export function resolveWeightAsOf(weighIns: WeighIn[], date: string): number | n
   return match.weightKg;
 }
 
-/** The goal fields tracked in `goal_history`, as they're named on `user_settings`. */
+/** The numeric goals tracked in `goal_history`, as named on `user_settings`. */
 export const GOAL_FIELDS = [
   'calorie_deficit',
   'protein_g_per_kg',
@@ -94,18 +103,43 @@ export const GOAL_FIELDS = [
 export type GoalField = (typeof GOAL_FIELDS)[number];
 
 /**
- * Whether a settings update changes any goal, and so needs a new history row.
+ * Whether a settings update changes anything that affects how a day is scored,
+ * and so needs a new snapshot. Renaming yourself or switching timezone does not.
  *
- * Compares numerically: the settings form round-trips these through strings, so a
- * saved-but-unchanged value can arrive as `500` where the row holds `"500"`, and a
- * strict comparison would append a spurious snapshot on every save.
+ * Numbers are compared numerically: the settings form round-trips them through
+ * text inputs and Postgres returns DECIMAL columns as strings, so an untouched
+ * value arrives as `500` against a stored `"500"`. A strict comparison would
+ * append a snapshot on every save.
  */
-export function goalsChanged(
+export function scoredConfigChanged(
   current: Record<string, unknown>,
   updates: Record<string, unknown>
 ): boolean {
-  return GOAL_FIELDS.some((field) => {
+  const goalMoved = GOAL_FIELDS.some((field) => {
     if (updates[field] === undefined) return false;
     return Number(updates[field]) !== Number(current[field]);
   });
+
+  if (goalMoved) return true;
+  if (updates.supplements === undefined) return false;
+
+  return !sameSupplements(
+    current.supplements as Supplement[] | null,
+    updates.supplements as Supplement[] | null
+  );
+}
+
+/**
+ * Compares the fields that affect scoring — id, name and fiber — ignoring order
+ * and ignoring `detail`, which is a free-text note the user can reword without
+ * changing what any day was measured against.
+ */
+function sameSupplements(a: Supplement[] | null, b: Supplement[] | null): boolean {
+  const normalize = (list: Supplement[] | null) =>
+    (list ?? [])
+      .map((s) => `${s.id}:${s.name}:${Number(s.fiber_g) || 0}`)
+      .sort()
+      .join('|');
+
+  return normalize(a) === normalize(b);
 }

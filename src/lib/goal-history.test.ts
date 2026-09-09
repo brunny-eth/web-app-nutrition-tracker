@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   GoalSnapshot,
-  goalsChanged,
   resolveGoalsAsOf,
   resolveWeightAsOf,
+  scoredConfigChanged,
 } from './goal-history';
 
 const snapshot = (effectiveFrom: string, calorieDeficit: number, proteinGPerKg: number): GoalSnapshot => ({
@@ -12,6 +12,7 @@ const snapshot = (effectiveFrom: string, calorieDeficit: number, proteinGPerKg: 
   proteinGPerKg,
   proteinFloorG: 150,
   saturatedFatPercent: 10,
+  supplements: [],
 });
 
 // The change that prompted all of this: 300 kcal / 1.6 g/kg until the switch on
@@ -75,31 +76,66 @@ describe('resolveWeightAsOf', () => {
   });
 });
 
-describe('goalsChanged', () => {
+describe('scoredConfigChanged', () => {
+  const psyllium = { id: 'psyllium', name: 'Psyllium husk', fiber_g: 5 };
+  const creatine = { id: 'creatine', name: 'Creatine' };
+
   const current = {
     calorie_deficit: 500,
     protein_g_per_kg: 2.0,
     protein_floor_g: 150,
     saturated_fat_percent: 10,
+    supplements: [psyllium, creatine],
   };
 
   it('detects a changed goal', () => {
-    expect(goalsChanged(current, { calorie_deficit: 300 })).toBe(true);
-    expect(goalsChanged(current, { protein_g_per_kg: 1.6 })).toBe(true);
+    expect(scoredConfigChanged(current, { calorie_deficit: 300 })).toBe(true);
+    expect(scoredConfigChanged(current, { protein_g_per_kg: 1.6 })).toBe(true);
   });
 
-  it('ignores a save that leaves the goals alone', () => {
-    expect(goalsChanged(current, { calorie_deficit: 500, name: 'Bruno' })).toBe(false);
+  it('ignores a save that leaves everything alone', () => {
+    expect(scoredConfigChanged(current, { calorie_deficit: 500, name: 'Bruno' })).toBe(false);
   });
 
-  it('ignores non-goal fields', () => {
-    expect(goalsChanged(current, { weight_kg: 90, timezone: 'UTC' })).toBe(false);
+  it('ignores fields that do not affect scoring', () => {
+    expect(scoredConfigChanged(current, { weight_kg: 90, timezone: 'UTC' })).toBe(false);
   });
 
   it('does not treat a string round-trip as a change', () => {
     // The settings form posts numbers parsed from text inputs; Postgres hands back
     // DECIMAL columns as strings. Comparing those strictly appended a snapshot on
     // every save, however little changed.
-    expect(goalsChanged({ ...current, protein_g_per_kg: '2.0' }, { protein_g_per_kg: 2.0 })).toBe(false);
+    expect(
+      scoredConfigChanged({ ...current, protein_g_per_kg: '2.0' }, { protein_g_per_kg: 2.0 })
+    ).toBe(false);
+  });
+
+  it('detects a changed fiber dose', () => {
+    // The reason this exists: 5g of psyllium becoming 10g must not restate the
+    // fiber total of every day already logged.
+    expect(
+      scoredConfigChanged(current, { supplements: [{ ...psyllium, fiber_g: 10 }, creatine] })
+    ).toBe(true);
+  });
+
+  it('detects an added or removed supplement', () => {
+    expect(scoredConfigChanged(current, { supplements: [psyllium] })).toBe(true);
+    expect(
+      scoredConfigChanged(current, { supplements: [psyllium, creatine, { id: 'd3', name: 'Vitamin D' }] })
+    ).toBe(true);
+  });
+
+  it('ignores reordering and detail edits', () => {
+    expect(
+      scoredConfigChanged(current, {
+        supplements: [{ ...creatine, detail: '5g after training' }, psyllium],
+      })
+    ).toBe(false);
+  });
+
+  it('treats a missing fiber amount as none', () => {
+    expect(
+      scoredConfigChanged(current, { supplements: [psyllium, { ...creatine, fiber_g: 0 }] })
+    ).toBe(false);
   });
 });

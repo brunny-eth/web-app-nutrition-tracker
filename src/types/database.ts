@@ -11,6 +11,12 @@ export interface Supplement {
   id: string;
   name: string;
   detail?: string;
+
+  /**
+   * Fiber contributed per dose, folded into the day's total when the supplement is
+   * ticked. Optional because most supplements contribute none; absent reads as 0.
+   */
+  fiber_g?: number | null;
 }
 
 export interface Database {

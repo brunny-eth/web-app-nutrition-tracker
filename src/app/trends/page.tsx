@@ -64,7 +64,11 @@ interface SupplementAdherence {
   id: string;
   name: string;
   taken: number;
-  pct: number;
+  // Days in the window on which this supplement was on the list — its own
+  // denominator, not the window's, so a newly added one isn't scored against
+  // weeks that predate it. Null pct when it existed on none of them.
+  days: number;
+  pct: number | null;
 }
 
 interface Adherence {
@@ -758,7 +762,8 @@ export default function TrendsPage() {
             Supplements &amp; Alcohol
           </h2>
           <p className="mb-4 text-xs text-zinc-500">
-            % of tracked days (excludes today; only counts days you used the checklist)
+            % of tracked days (excludes today; only counts days you used the checklist,
+            and only days each supplement was actually on your list)
           </p>
           {!monthAdh || monthAdh.days === 0 ? (
             <p className="py-6 text-center text-sm text-zinc-500">No checklist data yet</p>
@@ -779,10 +784,10 @@ export default function TrendsPage() {
                       <tr key={s.id}>
                         <td className="py-2 text-zinc-700 dark:text-zinc-300">{s.name}</td>
                         <td className="py-2 text-right">
-                          <AdherenceCell pct={week?.pct ?? null} taken={week?.taken} days={weekAdh?.days} />
+                          <AdherenceCell pct={week?.pct ?? null} taken={week?.taken} days={week?.days} />
                         </td>
                         <td className="py-2 text-right">
-                          <AdherenceCell pct={s.pct} taken={s.taken} days={monthAdh.days} />
+                          <AdherenceCell pct={s.pct} taken={s.taken} days={s.days} />
                         </td>
                       </tr>
                     );
