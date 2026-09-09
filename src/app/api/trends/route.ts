@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserId } from '@/lib/auth';
 import { supplementFiberBonus } from '@/lib/supplements';
-import { FALLBACK_ACTIVITY_MULTIPLIER, resolveActivityMultiplier } from '@/lib/tdee';
+import {
+  FALLBACK_ACTIVITY_MULTIPLIER,
+  calculateBMR,
+  proteinTargetGrams,
+  resolveActivityMultiplier,
+} from '@/lib/tdee';
+import {
+  GoalSnapshot,
+  resolveGoalsAsOf,
+  resolveWeightAsOf,
+} from '@/lib/goal-history';
 import { addDaysToDateString } from '@/lib/date-resolution';
 import { roundLbs } from '@/lib/units';
 import { DEFAULT_SATURATED_FAT_PERCENT, saturatedFatPercentOfCalories } from '@/lib/targets';
@@ -36,6 +46,33 @@ export async function GET(request: NextRequest) {
     .select('*')
     .eq('id', userId)
     .single();
+
+  // Every goal change ever recorded. Cheap (a handful of rows) and deliberately
+  // unbounded by the date range: a day in the window is scored against whichever
+  // snapshot was in force then, which may long predate the window itself.
+  const { data: goalRows } = await supabase
+    .from('goal_history')
+    .select('effective_from, calorie_deficit, protein_g_per_kg, protein_floor_g, saturated_fat_percent')
+    .eq('user_id', userId)
+    .order('effective_from', { ascending: true });
+
+  const goalHistory: GoalSnapshot[] = (goalRows ?? []).map((g) => ({
+    effectiveFrom: g.effective_from,
+    calorieDeficit: Number(g.calorie_deficit),
+    proteinGPerKg: Number(g.protein_g_per_kg),
+    proteinFloorG: Number(g.protein_floor_g),
+    saturatedFatPercent: Number(g.saturated_fat_percent),
+  }));
+
+  // Falls back to the live settings row for an account with no history yet, so the
+  // page still works before the seed rows are in place.
+  const currentGoals: GoalSnapshot = {
+    effectiveFrom: '0000-01-01',
+    calorieDeficit: settings?.calorie_deficit ?? 0,
+    proteinGPerKg: settings?.protein_g_per_kg ?? 1.8,
+    proteinFloorG: settings?.protein_floor_g ?? 150,
+    saturatedFatPercent: settings?.saturated_fat_percent ?? DEFAULT_SATURATED_FAT_PERCENT,
+  };
 
   // Calculate date range. Always reach back far enough for the longest average
   // window; the charts are narrowed to `days` further down.
@@ -111,6 +148,13 @@ export async function GET(request: NextRequest) {
     weightLbs: roundLbs(Number(w.weight_kg)),
   }));
 
+  // The same rows in kg, for the per-day BMR and protein target below. The display
+  // series above is rounded to a tenth of a pound, which is lossy for arithmetic.
+  const weighIns = (weightRows ?? []).map((w) => ({
+    date: w.resolved_date,
+    weightKg: Number(w.weight_kg),
+  }));
+
   // Supplements taken per day, for folding psyllium's fiber into daily totals.
   const supplementsTakenByDate: Record<string, string[]> = {};
   checklists?.forEach((c) => {
@@ -123,15 +167,22 @@ export async function GET(request: NextRequest) {
     multiplierByDate[a.resolved_date] = resolveActivityMultiplier(a);
   });
 
-  // Calculate BMR if we have settings
-  let bmr: number | null = null;
-  if (settings?.weight_kg && settings?.height_cm && settings?.age_years && settings?.sex) {
-    if (settings.sex === 'male') {
-      bmr = 10 * settings.weight_kg + 6.25 * settings.height_cm - 5 * settings.age_years + 5;
-    } else {
-      bmr = 10 * settings.weight_kg + 6.25 * settings.height_cm - 5 * settings.age_years - 161;
-    }
-  }
+  // BMR is computed per day from that day's weight rather than once from the
+  // current one. Weight is the only term in Mifflin-St Jeor that moves week to
+  // week, and using today's value for a day three months ago quietly reduced the
+  // deficit already earned there by roughly 10 kcal per pound since lost.
+  // Falls back to the settings weight only when there are no weigh-ins at all.
+  const weightForDate = (date: string): number | null =>
+    resolveWeightAsOf(weighIns, date) ?? settings?.weight_kg ?? null;
+
+  const bmrForDate = (date: string): number | null => {
+    if (!settings?.height_cm || !settings?.age_years || !settings?.sex) return null;
+
+    const weightKg = weightForDate(date);
+    if (!weightKg) return null;
+
+    return calculateBMR(weightKg, settings.height_cm, settings.age_years, settings.sex).bmr;
+  };
 
   // Aggregate by date
   const dailyData: Record<string, {
@@ -150,6 +201,7 @@ export async function GET(request: NextRequest) {
     tdee: number | null;
     targetCalories: number | null;
     targetProtein: number | null;
+    satFatLimitPercent: number;
   }> = {};
 
   entries?.forEach((entry) => {
@@ -157,15 +209,19 @@ export async function GET(request: NextRequest) {
     if (!dailyData[date]) {
       // Calculate TDEE for this day
       const multiplier = multiplierByDate[date] ?? FALLBACK_ACTIVITY_MULTIPLIER;
+      const bmr = bmrForDate(date);
       const tdee = bmr ? Math.round(bmr * multiplier) : null;
-      const targetCalories = tdee && settings?.calorie_deficit 
-        ? tdee - settings.calorie_deficit 
+
+      // The goals as they stood on this date, so a later change to them can't
+      // rewrite how well the day went.
+      const goals = resolveGoalsAsOf(goalHistory, date) ?? currentGoals;
+      const weightKg = weightForDate(date);
+
+      const targetCalories = tdee && goals.calorieDeficit
+        ? tdee - goals.calorieDeficit
         : null;
-      const targetProtein = settings?.weight_kg
-        ? Math.max(
-            Math.round(settings.weight_kg * (settings.protein_g_per_kg ?? 1.8)),
-            settings.protein_floor_g ?? 150
-          )
+      const targetProtein = weightKg
+        ? proteinTargetGrams(weightKg, goals.proteinGPerKg, goals.proteinFloorG)
         : null;
 
       dailyData[date] = {
@@ -183,6 +239,7 @@ export async function GET(request: NextRequest) {
         tdee,
         targetCalories,
         targetProtein,
+        satFatLimitPercent: goals.saturatedFatPercent,
       };
     }
 

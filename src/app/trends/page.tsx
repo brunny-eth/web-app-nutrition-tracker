@@ -35,6 +35,7 @@ interface ChartDataPoint {
   tdee: number | null;
   targetCalories: number | null;
   targetProtein: number | null;
+  satFatLimitPercent: number;
   deficit: number | null;
   proteinPercent: number | null;
 }
@@ -416,12 +417,15 @@ export default function TrendsPage() {
           <h2 className="mb-2 text-lg font-medium text-zinc-900 dark:text-zinc-100">
             Protein
           </h2>
-          <p className="mb-4 text-xs text-zinc-500">Target: {settings?.targetProtein ?? '—'}g/day</p>
+          <p className="mb-4 text-xs text-zinc-500">
+            Current target: {settings?.targetProtein ?? '—'}g/day — the line follows the
+            target in force on each day
+          </p>
           {chartData.length === 0 ? (
             <p className="py-12 text-center text-zinc-500">No data for this period</p>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={trendData.map(d => ({ ...d, proteinTarget: settings?.targetProtein }))} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <ComposedChart data={trendData.map(d => ({ ...d, proteinTarget: d.targetProtein }))} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                 <XAxis 
                   dataKey="date" 
@@ -481,13 +485,13 @@ export default function TrendsPage() {
               Saturated Fat
             </h2>
             <p className="mb-4 text-xs text-zinc-500">
-              Limit: &lt;{recommendations.saturatedFatPercent}% of calories consumed
+              Current limit: &lt;{recommendations.saturatedFatPercent}% of calories consumed
             </p>
             {chartData.length === 0 ? (
               <p className="py-8 text-center text-zinc-500 text-sm">No data</p>
             ) : (
               <ResponsiveContainer width="100%" height={150}>
-                <ComposedChart data={trendData.map(d => ({ ...d, satFatLimitPct: recommendations.saturatedFatPercent }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                <ComposedChart data={trendData.map(d => ({ ...d, satFatLimitPct: d.satFatLimitPercent }))} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.3} />
                   <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 10, fill: '#71717a' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={[0, 'auto']} unit="%" />
@@ -719,7 +723,10 @@ export default function TrendsPage() {
                       {w}-Day
                     </th>
                   ))}
-                  <th className="py-2 pl-3 text-right font-medium text-zinc-500 whitespace-nowrap">Target</th>
+                  {/* The current goal, not a per-window one: each window's average
+                      is already scored against whatever was in force day by day, so
+                      there is no single historical target to print here. */}
+                  <th className="py-2 pl-3 text-right font-medium text-zinc-500 whitespace-nowrap">Target now</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">

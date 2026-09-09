@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserId, hashPassword, verifyPassword } from '@/lib/auth';
+import { goalsChanged } from '@/lib/goal-history';
+import { getTodayInTimezone } from '@/lib/date-resolution';
 
 function getSupabase() {
   return createClient(
@@ -124,6 +126,37 @@ export async function PATCH(request: NextRequest) {
     if (updateError) {
       console.error('Settings update error:', updateError);
       return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
+    }
+
+    // Record the new goals so trends can score past days against the goals that
+    // were in force then. Without this the settings row is the only record of what
+    // you were aiming at, and raising a target retroactively marks down every day
+    // you already hit the old one.
+    if (goalsChanged(current, updates)) {
+      // Effective from today, not from the update timestamp: goals apply to whole
+      // logged days, and today's food is still being entered against the new ones.
+      // Upserting on that date also collapses several edits in one day into a
+      // single snapshot, rather than leaving a trail of intermediate values.
+      const effectiveFrom = getTodayInTimezone(updated.timezone ?? current.timezone);
+
+      const { error: historyError } = await supabase
+        .from('goal_history')
+        .upsert(
+          {
+            user_id: userId,
+            effective_from: effectiveFrom,
+            calorie_deficit: updated.calorie_deficit,
+            protein_g_per_kg: updated.protein_g_per_kg,
+            protein_floor_g: updated.protein_floor_g,
+            saturated_fat_percent: updated.saturated_fat_percent,
+          },
+          { onConflict: 'user_id,effective_from' }
+        );
+
+      // The settings themselves saved; failing the request would misreport that.
+      if (historyError) {
+        console.error('Goal history write error:', historyError);
+      }
     }
 
     return NextResponse.json({ settings: updated });
