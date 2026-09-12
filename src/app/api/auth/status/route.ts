@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { getUserId } from '@/lib/auth';
 import { DEFAULT_SATURATED_FAT_PERCENT } from '@/lib/targets';
+import { ensureDemoSeeded } from '@/lib/demo-seed';
 
 /**
  * GET /api/auth/status - Check authentication status and get user settings
@@ -23,13 +24,31 @@ export async function GET() {
     // Get current user's settings if authenticated
     let settings = null;
     if (authenticated && userId) {
-      const { data } = await supabase
-        .from('user_settings')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const readSettings = async () => {
+        const { data } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        return data;
+      };
+
+      let data = await readSettings();
 
       if (data) {
+        // The shared demo account tops itself up here rather than on a cron: this
+        // runs on every page load, so the history is complete by the time anything
+        // reads it, and it stays correct however long the account sat unused.
+        const demoSeeded = await ensureDemoSeeded(supabase, {
+          id: data.id,
+          email: data.email,
+          timezone: data.timezone,
+        });
+
+        // Seeding a new day moves the demo account's weight, which drives BMR and
+        // the protein target on the dashboard below.
+        if (demoSeeded) data = (await readSettings()) ?? data;
+
         settings = {
           name: data.name,
           weight_kg: data.weight_kg,

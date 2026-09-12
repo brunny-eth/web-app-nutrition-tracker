@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "eval": "vite-node --config vitest.config.ts scripts/eval-meals.ts",
+    "seed:demo": "vite-node --config vitest.config.ts scripts/seed-demo.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
