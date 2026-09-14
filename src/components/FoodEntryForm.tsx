@@ -47,6 +47,30 @@ function toRecentLabel(rawText: string): string {
     : oneLine;
 }
 
+/**
+ * The message to show for a failed request.
+ *
+ * A route's own failures are JSON, but the ones that hurt most aren't: a function
+ * timeout or an oversized body is answered by the platform edge with HTML, and
+ * res.json() on that throws a SyntaxError that gets displayed in place of the real
+ * problem. Those two statuses also have something specific worth saying, since the
+ * user can act on both.
+ */
+async function errorMessage(res: Response, fallback: string): Promise<string> {
+  if (res.status === 504 || res.status === 502) {
+    return 'That took too long to read. Try fewer photos, or type the ingredients out.';
+  }
+  if (res.status === 413) {
+    return 'Those photos are too large to upload. Try fewer of them.';
+  }
+  try {
+    const data = await res.json();
+    return data.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 interface FoodEntryFormProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
@@ -255,8 +279,7 @@ export function FoodEntryForm({
           }),
         });
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || 'Failed to save meal');
+          throw new Error(await errorMessage(res, 'Failed to save meal'));
         }
         resetForm();
         onSavedMealCreated();
@@ -275,8 +298,7 @@ export function FoodEntryForm({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to log food');
+        throw new Error(await errorMessage(res, 'Failed to log food'));
       }
 
       resetForm();

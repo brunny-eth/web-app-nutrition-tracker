@@ -60,7 +60,12 @@ export type ParsedMeal = z.infer<typeof ParsedMealSchema>;
 
 /**
  * A meal eaten often, parsed once into ONE SERVING. Logging it multiplies the
- * stored items by the number of servings eaten.
+ * stored item by the number of servings eaten.
+ *
+ * One item, not one per ingredient. Nothing ever shows a saved meal's breakdown —
+ * the list sums it to calories and protein, and its ingredients can't be edited —
+ * so itemizing spent output tokens linearly in recipe length for a detail no screen
+ * reads. A long recipe pushed the parse past the function timeout.
  *
  * No explicit_date: a saved meal isn't eaten at a point in time, its servings are.
  */
@@ -76,7 +81,9 @@ export const ParsedSavedMealSchema = z.object({
     + 'since the user is scooping a bowl, not dividing a pot.'
   ),
   items: z.array(FoodItemSchema).describe(
-    'The ingredients of ONE serving — not the whole recipe.'
+    'Exactly ONE item, covering one whole serving — not one item per ingredient, and '
+    + 'not the whole recipe. An array only because the storage it feeds is shared with '
+    + 'the meal path, which does itemize.'
   ),
   rejection_reason: z.string().nullable().describe(
     'Set this when no meal or ingredient list can be identified from the images '

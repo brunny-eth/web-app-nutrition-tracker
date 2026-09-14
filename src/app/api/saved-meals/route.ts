@@ -4,9 +4,9 @@ import { getUserId } from '@/lib/auth';
 import { parseSavedMeal, MealRejectedError } from '@/lib/nutrition-ai';
 import { repairParsedMeal } from '@/lib/meal-repair';
 
-// Parsing a recipe with images takes well over Vercel's default function timeout —
-// a 10-ingredient recipe measured ~37s locally. Without this the request is killed
-// mid-parse and the user just sees a failure.
+// Reading several recipe screenshots still takes longer than the default timeout,
+// though far less than it used to: the parse returns one item for the whole serving
+// rather than one per ingredient, so its cost no longer grows with recipe length.
 export const maxDuration = 60;
 
 /**
@@ -61,6 +61,10 @@ export async function GET() {
 
 /**
  * POST /api/saved-meals - parse a meal into one serving and store it
+ *
+ * The parse returns a single item covering the whole serving, so a 30-ingredient
+ * recipe costs the same as a shake. It's still stored as a row in saved_meal_items,
+ * which keeps the scaling and logging paths shared with the meal path.
  *
  * Creates no entry and adds nothing to today's totals: a saved meal is something you
  * log servings from, not food you've eaten.

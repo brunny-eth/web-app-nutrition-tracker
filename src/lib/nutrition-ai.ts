@@ -279,10 +279,11 @@ NUTRITIONAL DATA:
 - ADDED SUGAR: Only sugars added during processing/cooking, NOT natural sugars from whole fruits, plain dairy, or vegetables. Honey, syrup, and table sugar are added sugar.
 - POTASSIUM: Include potassium in mg. Good sources include potatoes (~900mg each), beans and lentils, spinach, tomatoes, bananas (~400mg).
 
-ITEMIZE PER INGREDIENT:
-- Return one item per ingredient, at ONE SERVING's quantity.
-- Do NOT collapse the meal into a single item. The user needs to see where the calories sit and correct one ingredient without redoing the whole thing.
-- Combine only genuinely trivial items (a pinch of several spices can be one "spices" line).
+RETURN ONE ITEM:
+- Return exactly ONE item covering the whole serving. Do NOT itemize per ingredient.
+- Work out each ingredient's contribution internally, then sum them into that single item. The arithmetic still has to be per-ingredient; only the output is collapsed.
+- Name it after the meal, not its parts: "Sunday beef and lentil chili", not "ground beef".
+- The grams field is the weight of the whole serving.
 
 CONFIDENCE RANGES:
 - Tight intervals when quantities are explicit: low = estimate x 0.9, high = estimate x 1.1.
@@ -320,21 +321,21 @@ export async function parseSavedMeal(
       text:
         `The images above are one meal or recipe. My notes on how I actually made it — `
         + `these take priority over the images:\n\n"${trimmed}"\n\n`
-        + `Give me one serving, itemized, and tell me exactly what one serving is.`,
+        + `Give me one serving as a single total, and tell me exactly what one serving is.`,
     });
   } else if (hasImages) {
     userContent.push({
       type: 'text',
       text:
-        'The images above are one meal or recipe, made as written. Give me one serving, '
-        + 'itemized, and tell me exactly what one serving is.',
+        'The images above are one meal or recipe, made as written. Give me one serving as '
+        + 'a single total, and tell me exactly what one serving is.',
     });
   } else {
     userContent.push({
       type: 'text',
       text:
-        `Here is a meal I eat often. Give me one serving, itemized, and tell me exactly `
-        + `what one serving is:\n\n"${trimmed}"`,
+        `Here is a meal I eat often. Give me one serving as a single total, and tell me `
+        + `exactly what one serving is:\n\n"${trimmed}"`,
     });
   }
 
