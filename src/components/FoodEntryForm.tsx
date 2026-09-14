@@ -353,23 +353,25 @@ export function FoodEntryForm({
       {images.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {images.map((img, i) => (
-            <div key={`${img.name}-${i}`} className="relative inline-block">
-              <img
-                src={img.dataUrl}
-                alt={`Attachment ${i + 1}`}
-                className="h-20 w-auto rounded-lg border border-zinc-200 dark:border-zinc-700"
-              />
-              <button
-                type="button"
-                onClick={() => removeImage(i)}
-                aria-label={`Remove ${img.name}`}
-                className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
-              >
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-              <p className="mt-1 max-w-[150px] truncate text-xs text-zinc-500">{img.name}</p>
+            <div key={`${img.name}-${i}`} className="w-20">
+              <div className="relative h-20 w-20 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <img
+                  src={img.dataUrl}
+                  alt={`Attachment ${i + 1}`}
+                  className="h-full w-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeImage(i)}
+                  aria-label={`Remove ${img.name}`}
+                  className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white backdrop-blur-sm transition hover:bg-black/75"
+                >
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="mt-1 truncate text-xs text-zinc-500">{img.name}</p>
             </div>
           ))}
         </div>
