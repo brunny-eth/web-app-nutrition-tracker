@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface LoginFormProps {
   onSuccess: () => void;
@@ -8,6 +9,7 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
+  const router = useRouter();
   // Default to login mode if users exist, otherwise registration
   const [mode, setMode] = useState<'login' | 'register'>(isSetUp ? 'login' : 'register');
   
@@ -55,7 +57,11 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
         throw new Error(data.error || 'Could not open the demo');
       }
 
-      onSuccess();
+      // Trends, not the dashboard: three months of charts makes the case for
+      // tracking better than today's food log does. Left loading — the push
+      // replaces this page, and flicking the link back to its idle label on the
+      // way out just looks like a misfire.
+      router.push('/trends');
     } catch (err) {
       setDemoError(err instanceof Error ? err.message : 'Could not open the demo');
       setDemoLoading(false);
