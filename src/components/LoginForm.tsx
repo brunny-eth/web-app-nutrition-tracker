@@ -358,9 +358,6 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
         >
           {demoLoading ? 'Opening the demo...' : 'See what the demo looks like →'}
         </button>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Three months of logged food in a shared account. Poke around, nothing is yours to break.
-        </p>
         {demoError && (
           <p className="mt-2 text-sm text-red-600 dark:text-red-400">{demoError}</p>
         )}

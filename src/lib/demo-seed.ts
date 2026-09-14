@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fromZonedTime } from 'date-fns-tz';
 import { addDaysToDateString, getTodayInTimezone } from '@/lib/date-resolution';
@@ -105,34 +106,32 @@ export async function seedDemoDay(
   // Re-running a day must not double it up. Cheap because a day is ~5 entries.
   await supabase.from('entries').delete().eq('user_id', userId).eq('resolved_date', date);
 
-  for (const entry of plan.entries) {
-    const createdAt = fromZonedTime(
+  // Entry ids are generated here rather than read back from the insert, so a day
+  // costs one round trip for its entries and one for their items instead of two
+  // per entry. Worth the small oddity: this runs while a visitor waits on the
+  // sign-in page, and every round trip saved is ~200ms off that wait.
+  const entryRows = plan.entries.map((entry) => ({
+    id: randomUUID(),
+    user_id: userId,
+    raw_text: entry.raw_text,
+    resolved_date: date,
+    explicit_date_in_text: false,
+    created_at: fromZonedTime(
       `${date} ${String(entry.hour).padStart(2, '0')}:${String((entry.hour * 17) % 60).padStart(2, '0')}:00`,
       timezone
-    ).toISOString();
+    ).toISOString(),
+  }));
 
-    const { data: row, error } = await supabase
-      .from('entries')
-      .insert({
-        user_id: userId,
-        raw_text: entry.raw_text,
-        resolved_date: date,
-        explicit_date_in_text: false,
-        created_at: createdAt,
-      })
-      .select('id')
-      .single();
+  const { error } = await supabase.from('entries').insert(entryRows);
+  if (error) throw error;
 
-    if (error || !row) throw error ?? new Error('Failed to insert demo entry');
+  const { error: itemsError } = await supabase.from('entry_items').insert(
+    plan.entries.flatMap((entry, i) => entry.items.map((item) => itemRow(item, entryRows[i].id)))
+  );
 
-    const { error: itemsError } = await supabase
-      .from('entry_items')
-      .insert(entry.items.map((item) => itemRow(item, row.id)));
-
-    if (itemsError) {
-      await supabase.from('entries').delete().eq('id', row.id);
-      throw itemsError;
-    }
+  if (itemsError) {
+    await supabase.from('entries').delete().in('id', entryRows.map((row) => row.id));
+    throw itemsError;
   }
 
   await supabase.from('daily_activity').delete().eq('user_id', userId).eq('resolved_date', date);
@@ -193,16 +192,28 @@ export async function backfillDemoUser(
 
     if (missing.length === 0) return [];
 
-    for (const date of missing) {
-      await seedDemoDay(supabase, userId, date, timezone);
+    // Days are independent, and a visitor is watching a spinner until this
+    // finishes, so they go out together: a pass costs one day's latency rather
+    // than ten. `allSettled` because a day that fails is simply left unmarked and
+    // retried on the next request — no reason to discard the days that worked.
+    const results = await Promise.allSettled(
+      missing.map((date) => seedDemoDay(supabase, userId, date, timezone))
+    );
+
+    const written = missing.filter((_, i) => results[i].status === 'fulfilled');
+
+    for (const result of results) {
+      if (result.status === 'rejected') console.error('Demo day seed failed:', result.reason);
     }
+
+    if (written.length === 0) return [];
 
     await supabase
       .from('user_settings')
       .update({ weight_kg: demoWeightKg(today), updated_at: new Date().toISOString() })
       .eq('id', userId);
 
-    return missing;
+    return written;
   } catch (error) {
     console.error('Demo backfill failed:', error);
     return [];

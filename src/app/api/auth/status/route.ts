@@ -14,12 +14,19 @@ export async function GET() {
     
     const supabase = createServerClient();
     
-    // Check if any users exist (to determine if showing login or signup)
-    const { count } = await supabase
+    // Check if any users exist (to determine if showing login or signup).
+    //
+    // "Nobody has signed up" and "the check failed" are different answers, and
+    // only the first should open the page on the registration form. A count that
+    // came back empty because of a transient error used to read as an empty
+    // database, dropping a visitor to a site full of accounts into Create Account.
+    const { data: anyUser, error: usersError } = await supabase
       .from('user_settings')
-      .select('*', { count: 'exact', head: true });
+      .select('id')
+      .limit(1)
+      .maybeSingle();
 
-    const isSetUp = (count || 0) > 0;
+    const isSetUp = usersError ? true : !!anyUser;
 
     // Get current user's settings if authenticated
     let settings = null;
@@ -74,7 +81,9 @@ export async function GET() {
     console.error('Auth status error:', error);
     return NextResponse.json({ 
       authenticated: false, 
-      isSetUp: false,
+      // Same reasoning as above: on an unknown failure show the sign-in form,
+      // rather than inviting someone who has an account to make a second one.
+      isSetUp: true,
       settings: null,
     });
   }
