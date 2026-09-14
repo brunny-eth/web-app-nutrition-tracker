@@ -15,6 +15,8 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoError, setDemoError] = useState('');
 
   // Registration form fields
   const [name, setName] = useState('');
@@ -39,6 +41,25 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
   const switchMode = (newMode: 'login' | 'register') => {
     resetForm();
     setMode(newMode);
+  };
+
+  const handleDemo = async () => {
+    setDemoError('');
+    setDemoLoading(true);
+
+    try {
+      const res = await fetch('/api/auth/demo', { method: 'POST' });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Could not open the demo');
+      }
+
+      onSuccess();
+    } catch (err) {
+      setDemoError(err instanceof Error ? err.message : 'Could not open the demo');
+      setDemoLoading(false);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -326,6 +347,24 @@ export function LoginForm({ onSuccess, isSetUp }: LoginFormProps) {
           </button>
         </form>
       )}
+
+      {/* Demo account: a visitor can see a filled-in dashboard without signing up */}
+      <div className="border-t border-zinc-200 pt-4 text-center dark:border-zinc-800">
+        <button
+          type="button"
+          onClick={handleDemo}
+          disabled={demoLoading || loading}
+          className="text-sm font-medium text-blue-600 underline-offset-4 transition-colors hover:text-blue-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+        >
+          {demoLoading ? 'Opening the demo...' : 'See what the demo looks like →'}
+        </button>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Three months of logged food in a shared account. Poke around, nothing is yours to break.
+        </p>
+        {demoError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">{demoError}</p>
+        )}
+      </div>
     </div>
   );
 }
