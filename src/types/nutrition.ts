@@ -7,6 +7,16 @@ import { z } from 'zod';
  */
 export const IMAGE_ONLY_TEXT = '1 serving';
 
+/**
+ * How many photos one submission may carry, meal or recipe alike.
+ *
+ * Each compressed image is ~200-500KB and base64 inflates that by a third inside a
+ * JSON body, so the cap keeps a multi-page recipe or a multi-angle plate under the
+ * serverless request body limit, which would otherwise fail as an opaque network
+ * error. Enforced in the form and again in the routes.
+ */
+export const MAX_MEAL_IMAGES = 4;
+
 // Schema for a single food item with 90% confidence ranges
 export const FoodItemSchema = z.object({
   food_name: z.string().describe('Name of the food item'),

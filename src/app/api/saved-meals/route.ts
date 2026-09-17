@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase';
 import { getUserId } from '@/lib/auth';
 import { parseSavedMeal, MealRejectedError } from '@/lib/nutrition-ai';
 import { repairParsedMeal } from '@/lib/meal-repair';
+import { MAX_MEAL_IMAGES } from '@/types/nutrition';
 
 // Reading several recipe screenshots still takes longer than the default timeout,
 // though far less than it used to: the parse returns one item for the whole serving
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     const { description, images, name } = await request.json();
 
     const desc: string = (description ?? '').trim();
-    const imageList: string[] = Array.isArray(images) ? images.filter(Boolean) : [];
+    const imageList: string[] = (Array.isArray(images) ? images.filter(Boolean) : []).slice(0, MAX_MEAL_IMAGES);
 
     if (!desc && imageList.length === 0) {
       return NextResponse.json(

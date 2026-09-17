@@ -94,6 +94,13 @@ Every attached image is one of two kinds. Decide which before anything else.
 - Estimates that lean on a food photo rather than stated amounts get at least ±15% bounds, even when the photo looks clear. Tighten to ±10% only where the text gives explicit amounts.
 - Combine image data with any other foods mentioned in the text
 
+MULTIPLE IMAGES:
+- Several images usually show ONE meal: different angles, a wide shot plus a close-up, before and after eating, or the plate next to the label or menu it came from. Classify each image on its own, then merge them into a single item list.
+- Count each food EXACTLY ONCE. Never add the same dish twice because it appeared in two photos. Split into separate items only where the images plainly show different dishes or packages, or the description says so.
+- Mixed kinds are common - a label for one component and a photo of the rest. Take the numbers from every NUTRITION SOURCE, and let the FOOD PHOTOS refine whatever the labels don't cover.
+- Before and after shots mean the user ate the difference. Estimate what was consumed, not what was served, and say so in the assumptions.
+- The context rule applies to the submission as a whole: reject only when every image is a food photo AND there is no description. If any image is a nutrition source, never reject.
+
 OUTPUT FORMAT:
 - Return a list of ALL food items (from both text AND image)
 - Each item should be a distinct food (e.g., "grilled chicken breast", "steamed broccoli")
@@ -150,7 +157,15 @@ Output: 2 items
 
 Example 7 - Food photo with no context:
 Input: photo of a burrito, no description (or only "1 serving")
-Output: 0 items, rejection_reason: "For accuracy, please provide some context beyond just an image to continue processing this meal."`;
+Output: 0 items, rejection_reason: "For accuracy, please provide some context beyond just an image to continue processing this meal."
+
+Example 8 - Several photos of one meal (merged, counted once):
+Input: 3 images - a plate from above, the same plate from the side, and the salmon package label - plus "salmon and salad for dinner"
+Output: 2 items
+  1. "baked salmon fillet" (6 oz): read from the package label, scaled to the portion on the plate. Bounds ±10% because the label carries the numbers.
+     Assumptions: Label gave per-4-oz values; the two plate photos show one fillet of roughly 6 oz. Both plate photos are the same fillet - counted once.
+  2. "mixed green salad with vinaigrette" (~2 cups): 180 cal (153-207), 3g protein, 9g carbs, 15g fat, 2.2g sat_fat, 3g fiber, 240mg sodium, 0g added_sugar, 400mg potassium
+     Assumptions: Side view shows dressing pooled in the bowl - counted ~1.5 tbsp vinaigrette. Photo-assisted so ±15%.`;
 
 /** Turn a `data:image/jpeg;base64,...` URL into an image block, or null if malformed. */
 function toImageBlock(dataUrl: string): Anthropic.ImageBlockParam | null {
@@ -169,24 +184,40 @@ function toImageBlock(dataUrl: string): Anthropic.ImageBlockParam | null {
 export async function parseMealDescription(
   mealText: string,
   todayDate: string, // YYYY-MM-DD format, in user's timezone
-  imageBase64?: string // Optional base64 image data
+  imagesBase64: string[] = [] // Optional base64 images, all of the same meal
 ): Promise<ParsedMeal> {
   const userContent: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = [];
 
-  if (imageBase64) {
-    const block = toImageBlock(imageBase64);
-    if (block) userContent.push(block);
-  }
+  // Images first, then the description, so the text reads as notes on what precedes
+  // it. Each gets a numbered label once there's more than one, so the model can cite
+  // which photo a given assumption came from.
+  imagesBase64.forEach((dataUrl, i) => {
+    const block = toImageBlock(dataUrl);
+    if (!block) return;
+    if (imagesBase64.length > 1) {
+      userContent.push({ type: 'text', text: `Image ${i + 1} of ${imagesBase64.length}:` });
+    }
+    userContent.push(block);
+  });
+
+  // Counts only the images that actually parsed — a malformed data URL contributes
+  // no block, and the prompt shouldn't promise an image that isn't there.
+  const imageCount = userContent.filter((block) => block.type === 'image').length;
 
   // Build text prompt
   let textPrompt = `Today's date is ${todayDate}.\n\n`;
 
-  if (imageBase64 && mealText && mealText !== IMAGE_ONLY_TEXT) {
-    // Deliberately doesn't claim what the image is — it may be a label, or it may be
-    // a photo of the plate that only supplements the description.
-    textPrompt += `Parse this meal. An image is attached. The user's description is: "${mealText}"\n\nIf the image is a nutrition label, menu, or stats screenshot, take the numbers from it. If it is a photo of the food itself, use it to refine the description — portion size, ingredients, preparation — with the text taking priority. Parse any other foods mentioned in the text too.`;
-  } else if (imageBase64) {
-    textPrompt += `Extract nutritional data from this image. The user gave no description of the food. If it is a nutrition label, menu, or stats screenshot, read it and assume 1 serving unless otherwise indicated. If it is a photo of actual food, reject it per the IMAGE HANDLING rules.`;
+  if (imageCount > 0 && mealText && mealText !== IMAGE_ONLY_TEXT) {
+    // Deliberately doesn't claim what the images are — they may be labels, or photos
+    // of the plate that only supplement the description.
+    const attached = imageCount === 1 ? 'An image is attached' : `${imageCount} images are attached`;
+    const merge = imageCount === 1
+      ? ''
+      : ' The images are all of the same meal unless the description says otherwise, so merge them and count each food only once.';
+    textPrompt += `Parse this meal. ${attached}. The user's description is: "${mealText}"\n\nIf an image is a nutrition label, menu, or stats screenshot, take the numbers from it. If it is a photo of the food itself, use it to refine the description — portion size, ingredients, preparation — with the text taking priority.${merge} Parse any other foods mentioned in the text too.`;
+  } else if (imageCount > 0) {
+    const subject = imageCount === 1 ? 'this image' : 'these images';
+    textPrompt += `Extract nutritional data from ${subject}. The user gave no description of the food. Where an image is a nutrition label, menu, or stats screenshot, read it and assume 1 serving unless otherwise indicated. If every image is a photo of actual food, reject per the IMAGE HANDLING rules.`;
   } else {
     textPrompt += `Parse the following meal description and return structured nutritional data:\n\n"${mealText}"`;
   }

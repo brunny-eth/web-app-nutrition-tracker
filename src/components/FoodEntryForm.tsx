@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { IMAGE_ONLY_TEXT } from '@/types/nutrition';
+import { IMAGE_ONLY_TEXT, MAX_MEAL_IMAGES } from '@/types/nutrition';
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
@@ -25,13 +25,6 @@ interface AttachedImage {
   dataUrl: string;
   name: string;
 }
-
-/**
- * Each compressed image is ~200-500KB, and base64 inflates that by a third inside a
- * JSON body. Capped so a multi-page recipe can't exceed the serverless request body
- * limit, which would fail as an opaque network error.
- */
-const MAX_RECIPE_IMAGES = 4;
 
 const RECENT_LABEL_MAX_CHARS = 80;
 
@@ -90,8 +83,9 @@ export function FoodEntryForm({
   yesterday,
 }: FoodEntryFormProps) {
   const [text, setText] = useState('');
-  // An array because a recipe often spans several screenshots. The meal path still
-  // sends only the first; multi-image is what recipe parsing needs.
+  // An array either way: a recipe spans several screenshots, and a single meal is
+  // often worth several shots too — the plate plus the label it came from, a couple
+  // of angles, or before and after.
   const [images, setImages] = useState<AttachedImage[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -198,11 +192,11 @@ export function FoodEntryForm({
       // Convert to JPEG with 85% quality (good balance of size vs quality)
       const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
       
-      // Recurring mode collects pages of one recipe; a normal log holds one label.
+      // Silently drops anything past the cap rather than erroring — the button and
+      // the file picker are already disabled once the limit is reached, so this only
+      // catches a multi-file drop that overshoots.
       setImages((prev) =>
-        isRecurring
-          ? [...prev, { dataUrl: compressedBase64, name: file.name }].slice(0, MAX_RECIPE_IMAGES)
-          : [{ dataUrl: compressedBase64, name: file.name }]
+        [...prev, { dataUrl: compressedBase64, name: file.name }].slice(0, MAX_MEAL_IMAGES)
       );
       setError('');
     };
@@ -223,11 +217,10 @@ export function FoodEntryForm({
     e.preventDefault();
     setIsDragging(false);
     
-    for (const file of Array.from(e.dataTransfer.files)) {
+    for (const file of Array.from(e.dataTransfer.files).slice(0, MAX_MEAL_IMAGES)) {
       handleImageFile(file);
-      if (!isRecurring) break; // a normal log holds one image
     }
-  }, [handleImageFile, isRecurring]);
+  }, [handleImageFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -240,13 +233,12 @@ export function FoodEntryForm({
   }, []);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    for (const file of Array.from(e.target.files ?? [])) {
+    for (const file of Array.from(e.target.files ?? []).slice(0, MAX_MEAL_IMAGES)) {
       handleImageFile(file);
-      if (!isRecurring) break;
     }
     // Cleared so re-picking the same file still fires a change event.
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [handleImageFile, isRecurring]);
+  }, [handleImageFile]);
 
   const removeImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
@@ -258,6 +250,7 @@ export function FoodEntryForm({
   };
 
   const canSubmit = Boolean(text.trim() || images.length > 0);
+  const atImageLimit = images.length >= MAX_MEAL_IMAGES;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -291,7 +284,7 @@ export function FoodEntryForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           raw_text: text.trim() || (images.length > 0 ? IMAGE_ONLY_TEXT : ''),
-          image: images[0]?.dataUrl,
+          images: images.map((img) => img.dataUrl),
           client_timestamp: new Date().toISOString(),
           override_date: selectedDate !== today ? selectedDate : undefined,
         }),
@@ -334,8 +327,8 @@ export function FoodEntryForm({
             isRecurring
               ? "Paste or describe the recipe, and note anything you changed — e.g. 'used 2 lb ground beef instead of 1'. Recipe photos work too."
               : images.length > 0
-                ? "Describe the food — a nutrition label stands on its own, but a photo of the meal needs a description to go with it."
-                : "Log food here via text, or a photo of nutrition facts/menu. A photo of the meal itself works too, alongside a description of what it is. The more details you include, the better. You can do 1 big message daily or split up for each meal."
+                ? "Describe the food — a nutrition label stands on its own, but photos of the meal need a description to go with them."
+                : "Log food here via text, or photos of nutrition facts/menu. Photos of the meal itself work too, alongside a description of what it is — up to 4, from any angle. The more details you include, the better. You can do 1 big message daily or split up for each meal."
           }
           rows={4}
           className="block w-full resize-none rounded-xl border-0 bg-transparent px-4 py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-0 dark:text-zinc-100"
@@ -344,12 +337,12 @@ export function FoodEntryForm({
         
         {isDragging && (
           <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-blue-50/90 dark:bg-blue-950/90">
-            <p className="text-blue-600 dark:text-blue-400 font-medium">Drop image here</p>
+            <p className="text-blue-600 dark:text-blue-400 font-medium">Drop images here</p>
           </div>
         )}
       </div>
 
-      {/* Image previews — several for a recurring meal, since a recipe spans pages */}
+      {/* Image previews — up to MAX_MEAL_IMAGES, recurring or not */}
       {images.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {images.map((img, i) => (
@@ -396,16 +389,22 @@ export function FoodEntryForm({
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          multiple={isRecurring}
+          multiple
           onChange={handleFileSelect}
           className="hidden"
         />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={loading}
+          disabled={loading || atImageLimit}
           className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          title={isRecurring ? 'Add photos of the recipe' : 'Add a photo — nutrition facts, a menu, or the meal itself'}
+          title={
+            atImageLimit
+              ? `${MAX_MEAL_IMAGES} photos is the limit — remove one to add another`
+              : isRecurring
+                ? 'Add photos of the recipe'
+                : 'Add photos — nutrition facts, a menu, or the meal itself'
+          }
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />

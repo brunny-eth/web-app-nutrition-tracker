@@ -4,7 +4,7 @@ import { getUserId } from '@/lib/auth';
 import { parseMealDescription, MealRejectedError } from '@/lib/nutrition-ai';
 import { repairParsedMeal } from '@/lib/meal-repair';
 import { resolveDate, getTodayInTimezone } from '@/lib/date-resolution';
-import { IMAGE_ONLY_TEXT } from '@/types/nutrition';
+import { IMAGE_ONLY_TEXT, MAX_MEAL_IMAGES } from '@/types/nutrition';
 
 // A meal parse measured 6-14s; Vercel's default function timeout leaves little
 // headroom above that, and a killed request loses the parse after paying for it.
@@ -21,10 +21,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { raw_text, image, client_timestamp, override_date } = await request.json();
+    const { raw_text, image, images, client_timestamp, override_date } = await request.json();
 
-    // Need either text or image
-    if ((!raw_text || raw_text.trim().length === 0) && !image) {
+    // `images` is what the form sends; `image` is the single-photo shape this route
+    // used to take, still accepted so an in-flight request from an older tab works.
+    const imageList: string[] = (Array.isArray(images) ? images : [image])
+      .filter((img): img is string => typeof img === 'string' && img.length > 0)
+      .slice(0, MAX_MEAL_IMAGES);
+
+    // Need either text or at least one photo
+    if ((!raw_text || raw_text.trim().length === 0) && imageList.length === 0) {
       return NextResponse.json({ error: 'Food description or image required' }, { status: 400 });
     }
 
@@ -44,7 +50,7 @@ export async function POST(request: NextRequest) {
     // `raw_text.trim()`, which threw on an image-only request that omitted the field.
     const mealText: string = raw_text?.trim() || IMAGE_ONLY_TEXT;
 
-    const parsed = await parseMealDescription(mealText, today, image || undefined);
+    const parsed = await parseMealDescription(mealText, today, imageList);
 
     // Clamp impossible ranges before they reach the database.
     const { meal: parsedMeal, repairs } = repairParsedMeal(parsed);
