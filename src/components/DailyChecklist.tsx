@@ -63,10 +63,6 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
     persist({ ...checklist, supplements_taken: [...taken] });
   };
 
-  const toggleAlcohol = () => {
-    persist({ ...checklist, alcohol: !checklist.alcohol });
-  };
-
   const commitBp = () => {
     const sysStr = sysInput.trim();
     const diaStr = diaInput.trim();
@@ -116,7 +112,6 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
   const summaryParts: string[] = [];
   if (supplements.length > 0) summaryParts.push(`${takenCount}/${supplements.length} taken`);
   if (checklist.weight_kg !== null) summaryParts.push(`${weightKgToInput(checklist.weight_kg)} lbs`);
-  if (checklist.alcohol) summaryParts.push('alcohol');
 
   return (
     <CollapsibleCard
@@ -125,7 +120,7 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
     >
       <div className="mb-3">
         <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Supplements &amp; Alcohol
+          Supplements
         </h4>
       </div>
 
@@ -164,30 +159,6 @@ export function DailyChecklist({ supplements, date, checklist, onChange }: Daily
           })}
         </div>
       )}
-
-      {/* Alcohol toggle */}
-      <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-        <button
-          type="button"
-          onClick={toggleAlcohol}
-          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-            checklist.alcohol
-              ? 'border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-300'
-              : 'border-zinc-200 bg-zinc-50 text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-          }`}
-        >
-          <span
-            className={`flex h-4 w-4 items-center justify-center rounded-full border text-[10px] ${
-              checklist.alcohol
-                ? 'border-amber-500 bg-amber-500 text-white dark:border-amber-600 dark:bg-amber-600'
-                : 'border-zinc-300 dark:border-zinc-600'
-            }`}
-          >
-            {checklist.alcohol ? '✓' : ''}
-          </span>
-          Drank alcohol
-        </button>
-      </div>
 
       {/* Metrics (optional numbers, logged occasionally) */}
       <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">

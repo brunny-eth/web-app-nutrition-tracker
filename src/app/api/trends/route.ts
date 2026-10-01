@@ -119,10 +119,10 @@ export async function GET(request: NextRequest) {
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr);
 
-  // Get supplement/alcohol checklist for each day
+  // Get supplement checklist for each day
   const { data: checklists } = await supabase
     .from('daily_checklist')
-    .select('resolved_date, supplements_taken, alcohol, bp_systolic, bp_diastolic')
+    .select('resolved_date, supplements_taken, bp_systolic, bp_diastolic')
     .eq('user_id', userId)
     .gte('resolved_date', startDateStr)
     .lte('resolved_date', endDateStr);
@@ -370,7 +370,7 @@ export async function GET(request: NextRequest) {
     fiberTarget: isMale ? 38 : 25,
   };
 
-  // --- Supplement & alcohol adherence ---
+  // --- Supplement adherence ---
   // Denominator is days that have a checklist row (so pre-feature days don't count against you).
   const supplementsList: Supplement[] = Array.isArray(settings?.supplements)
     ? settings.supplements
@@ -404,13 +404,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const alcoholFreeDays = rows.filter((r) => !r.alcohol).length;
-
     return {
       days: rows.length,
       supplements,
-      alcoholFreeDays,
-      alcoholFreePct: Math.round((alcoholFreeDays / rows.length) * 100),
     };
   };
 

@@ -74,8 +74,6 @@ interface SupplementAdherence {
 interface Adherence {
   days: number;
   supplements: SupplementAdherence[];
-  alcoholFreeDays: number;
-  alcoholFreePct: number;
 }
 
 interface TrendsData {
@@ -756,10 +754,10 @@ export default function TrendsPage() {
           </div>
         </section>
 
-        {/* Supplement & Alcohol Adherence */}
+        {/* Supplement Adherence */}
         <section className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-1 text-lg font-medium text-zinc-900 dark:text-zinc-100">
-            Supplements &amp; Alcohol
+            Supplements
           </h2>
           <p className="mb-4 text-xs text-zinc-500">
             % of tracked days (excludes today; only counts days you used the checklist,
@@ -792,23 +790,6 @@ export default function TrendsPage() {
                       </tr>
                     );
                   })}
-                  <tr>
-                    <td className="py-2 text-zinc-700 dark:text-zinc-300">Alcohol-free days</td>
-                    <td className="py-2 text-right">
-                      <AdherenceCell
-                        pct={weekAdh?.alcoholFreePct ?? null}
-                        taken={weekAdh?.alcoholFreeDays}
-                        days={weekAdh?.days}
-                      />
-                    </td>
-                    <td className="py-2 text-right">
-                      <AdherenceCell
-                        pct={monthAdh.alcoholFreePct}
-                        taken={monthAdh.alcoholFreeDays}
-                        days={monthAdh.days}
-                      />
-                    </td>
-                  </tr>
                 </tbody>
               </table>
             </div>

@@ -344,7 +344,7 @@ export default function Home() {
             onSelect={setActivityData}
           />
 
-          {/* Supplement & Alcohol Checklist */}
+          {/* Supplement Checklist */}
           <DailyChecklist
             supplements={authStatus.settings?.supplements ?? []}
             date={selectedDate}
